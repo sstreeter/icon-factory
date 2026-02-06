@@ -441,14 +441,14 @@ class MainWindow(QMainWindow):
             if self.autocrop_after.isChecked():
                 img = AutoCropper.crop_to_content(img, padding=5)
         
-        # Apply advanced edge processing (only if group is checked)
+        # ALWAYS apply quality enhancement (Clean by Default philosophy)
+        threshold = self.edge_threshold_spin.value()
+        img = EdgeProcessor.clean_edges(img, threshold=threshold, blur_radius=0.3)
+        
+        # Apply optional advanced features
         if hasattr(self, 'edge_group') and self.edge_group.isChecked():
             if self.defringe_check.isChecked():
                 img = EdgeProcessor.defringe_simple(img, strength=0.7)
-            
-            if self.clean_edges_check.isChecked():
-                threshold = self.edge_threshold_spin.value()
-                img = EdgeProcessor.clean_edges(img, threshold=threshold, blur_radius=0.3)
             
             # Apply mask expansion/contraction
             mask_adjust = self.mask_expand_spin.value()
