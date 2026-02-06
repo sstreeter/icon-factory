@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.5] - 2026-02-06
+
+### Changed
+- **Clean by Default Philosophy** - Quality enhancement now ALWAYS applies
+  - Clean Edges is now always-on (cannot be disabled)
+  - Ensures professional, artifact-free icons by default
+  - Edge threshold still adjustable for fine-tuning (0-50 alpha)
+  - Philosophy: "If output is garbage, it's user choice, not app failure"
+  
+### UI Updates
+- Updated "Advanced Edge Processing" to "Advanced Options"
+- Clean Edges checkbox now shows "✓ Clean Edges (Always Applied)" and is disabled
+- Defringe and Mask Adjust remain optional advanced features
+
 ## [1.0.4] - 2026-02-06
 
 ### Added

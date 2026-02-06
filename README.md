@@ -20,6 +20,19 @@ A professional icon creation utility with Mac-like ease of use and powerful mask
 - **Archive Support**: Optional ZIP packaging
 - **Real-time Preview**: See changes instantly with background options
 
+## Quality Philosophy
+
+**Icon Factory follows a "Clean by Default" philosophy:**
+
+Icons are designed to be professional, with clean lines and no artifacts. Quality enhancement (clean edges, anti-aliasing) is **always applied** to ensure professional output.
+
+- ✅ **Clean Edges**: Always removes pixel debris and artifacts
+- ✅ **Smooth Edges**: Always applies anti-aliasing for professional quality
+- ✅ **Adjustable**: Edge threshold can be fine-tuned (0-50 alpha)
+- ⚠️ **Philosophy**: If output is garbage, it's because you chose that, not because Icon Factory failed to clean it
+
+Advanced users can access optional features like Defringe and Mask Adjust in Advanced Options.
+
 ## Installation
 
 ```bash
