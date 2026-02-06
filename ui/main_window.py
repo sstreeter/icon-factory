@@ -258,6 +258,17 @@ class MainWindow(QMainWindow):
         tools_layout = QHBoxLayout()
         tools_layout.addWidget(QLabel("Overlays:"))
         
+        tools_help = self.create_help_btn(
+            "Artboard Overlays",
+            "<b>Visual aids for perfect icons.</b><br><br>"
+            "<ul>"
+            "<li><b>Mask (Red):</b> Shows removed/transparent areas in Red. Use this to adjustments.</li>"
+            "<li><b>Safe Zone:</b> Shows the Industry Standard 10% safety margin. Maintain key content inside the box.</li>"
+            "</ul>"
+        )
+        tools_layout.addWidget(tools_help)
+        tools_layout.addStretch() # Spacer
+        
         self.show_mask_overlay = QCheckBox("Mask (Red)")
         self.show_mask_overlay.setToolTip("Show removed areas in red")
         self.show_mask_overlay.toggled.connect(self.update_preview)
@@ -350,23 +361,53 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.autocrop_after)
         
         # Advanced edge processing
-        edge_group = QGroupBox("✨ Advanced Edge Processing (Optional)")
-        edge_group.setCheckable(True)
-        edge_group.setChecked(False)
-        edge_group.toggled.connect(self.apply_masking)
+        
+        # Header for Advanced Edge
+        edge_header = QHBoxLayout()
+        edge_label = QLabel("✨ Advanced Edge Processing (Optional)")
+        edge_help = self.create_help_btn(
+            "Advanced Edge Processing",
+            "<b>Fine-tune edge quality.</b><br><br>"
+            "<ul>"
+            "<li><b>Defringe:</b> Removes color halos/fringing from transparent edges.</li>"
+            "<li><b>Clean Edges:</b> Removes semi-transparent pixel debris.</li>"
+            "<li><b>Mask Adjust:</b> Expands or contracts the icon bounds.</li>"
+            "<li><b>Edge Threshold:</b> Determines what opacity is considered 'solid'.</li>"
+            "</ul>"
+        )
+        edge_header.addWidget(edge_label)
+        edge_header.addWidget(edge_help)
+        edge_header.addStretch()
+        
+        edge_group = QGroupBox()
+        edge_group.setTitle("") # Custom header via layout
         edge_layout = QVBoxLayout()
+        edge_layout.addLayout(edge_header)
+        
+        # Checkbox to enable group (simulated groupbox behavior)
+        self.edge_group_check = QCheckBox("Enable Edge Processing")
+        self.edge_group_check.setChecked(False)
+        self.edge_group_check.toggled.connect(self.apply_masking)
+        self.edge_group_check.toggled.connect(self.update_ui_state) # Update UI enable state
+        edge_layout.addWidget(self.edge_group_check)
+        
+        # Container for controls
+        controls_widget = QWidget()
+        controls_layout = QVBoxLayout(controls_widget)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        self.edge_controls = controls_widget # Store ref
         
         # Defringe checkbox
         self.defringe_check = QCheckBox("Defringe (Remove Color Halos)")
         self.defringe_check.setChecked(False)
         self.defringe_check.toggled.connect(self.apply_masking)
-        edge_layout.addWidget(self.defringe_check)
+        controls_layout.addWidget(self.defringe_check)
         
         # Clean edges checkbox
         self.clean_edges_check = QCheckBox("Clean Edges (Remove Pixel Debris)")
         self.clean_edges_check.setChecked(True)
         self.clean_edges_check.toggled.connect(self.apply_masking)
-        edge_layout.addWidget(self.clean_edges_check)
+        controls_layout.addWidget(self.clean_edges_check)
         
         # Mask expansion with spinbox
         expand_layout = QHBoxLayout()
@@ -382,7 +423,7 @@ class MainWindow(QMainWindow):
         
         expand_layout.addWidget(QLabel("(- = Contract, + = Expand)"))
         expand_layout.addStretch()
-        edge_layout.addLayout(expand_layout)
+        controls_layout.addLayout(expand_layout)
         
         # Edge threshold with spinbox
         threshold_layout = QHBoxLayout()
@@ -396,11 +437,13 @@ class MainWindow(QMainWindow):
         threshold_layout.addWidget(self.edge_threshold_spin)
         
         threshold_layout.addStretch()
-        edge_layout.addLayout(threshold_layout)
+        controls_layout.addLayout(threshold_layout)
         
+        edge_layout.addWidget(controls_widget)
         edge_group.setLayout(edge_layout)
+        
         layout.addWidget(edge_group)
-        self.edge_group = edge_group  # Store reference
+        self.edge_group = self.edge_group_check # Redirect reference for logic compatibility
         
         group.setLayout(layout)
         return group
@@ -428,7 +471,30 @@ class MainWindow(QMainWindow):
         
         layout.addStretch()
         group.setLayout(layout)
+        group.setLayout(layout)
         return group
+        
+    def create_help_btn(self, title: str, text: str):
+        """Create a help button with popup info."""
+        btn = QPushButton("?")
+        btn.setFixedSize(20, 20)
+        btn.setToolTip("Click for more info")
+        btn.setStyleSheet("""
+            QPushButton {
+                border-radius: 10px;
+                background-color: #ddd;
+                color: #555;
+                font-weight: bold;
+                border: 1px solid #aaa;
+            }
+            QPushButton:hover {
+                background-color: #4a90e2;
+                color: white;
+                border: 1px solid #357abd;
+            }
+        """)
+        btn.clicked.connect(lambda: QMessageBox.information(self, title, text))
+        return btn
         
     def create_geometry_panel(self):
         """Create Geometry Settings panel (Phase 4)."""
@@ -437,27 +503,65 @@ class MainWindow(QMainWindow):
         
         # 1. Smoothing (Wart Removal)
         smooth_layout = QVBoxLayout()
+        
+        # Header with Help
+        smooth_header = QHBoxLayout()
         smooth_label = QLabel("Smoothing (Wart Removal): 50")
+        self.smooth_label = smooth_label # Store ref for update
+        
+        smooth_help = self.create_help_btn(
+            "Geometry Smoothing (Wart Removal)",
+            "<b>Controls the aggression of the Smart Edge engine.</b><br><br>"
+            "<ul>"
+            "<li><b>0-40 (Gentle):</b> Faithful to source. Good for organic shapes.</li>"
+            "<li><b>50 (Standard):</b> Removes small pixel bumps while keeping curves.</li>"
+            "<li><b>60-100 (Aggressive):</b> The 'Enforcer'. Eats away warts and protrusions. "
+            "Forces lines to be straight. Use this for geometric icons with dirty edges.</li>"
+            "</ul>"
+        )
+        smooth_header.addWidget(smooth_label)
+        smooth_header.addWidget(smooth_help)
+        smooth_header.addStretch()
+        smooth_layout.addLayout(smooth_header)
+        
         self.smooth_slider = QSlider(Qt.Orientation.Horizontal)
         self.smooth_slider.setRange(0, 100)
         self.smooth_slider.setValue(50)
         self.smooth_slider.setToolTip("Aggressiveness of bump removal. Higher = Straighter lines.")
-        self.smooth_slider.valueChanged.connect(lambda v: smooth_label.setText(f"Smoothing (Wart Removal): {v}"))
+        self.smooth_slider.valueChanged.connect(lambda v: self.smooth_label.setText(f"Smoothing (Wart Removal): {v}"))
         
-        smooth_layout.addWidget(smooth_label)
         smooth_layout.addWidget(self.smooth_slider)
         layout.addLayout(smooth_layout)
         
         # 2. Corner Sharpness
         sharp_layout = QVBoxLayout()
+        
+        # Header with Help
+        sharp_header = QHBoxLayout()
         sharp_label = QLabel("Corner Sharpness: 50")
+        self.sharp_label = sharp_label
+        
+        sharp_help = self.create_help_btn(
+            "Corner Sharpness",
+            "<b>Controls the rounding radius of corners.</b><br><br>"
+            "<ul>"
+            "<li><b>0-30 (Round):</b> Soft, friendly, rounded corners.</li>"
+            "<li><b>50 (Standard):</b> Balanced anti-aliasing.</li>"
+            "<li><b>80-100 (Razor):</b> Sharp, crisp corners with minimal blur. "
+            "Perfect for modern, flat design.</li>"
+            "</ul>"
+        )
+        sharp_header.addWidget(sharp_label)
+        sharp_header.addWidget(sharp_help)
+        sharp_header.addStretch()
+        sharp_layout.addLayout(sharp_header)
+        
         self.sharp_slider = QSlider(Qt.Orientation.Horizontal)
         self.sharp_slider.setRange(0, 100)
         self.sharp_slider.setValue(50)
         self.sharp_slider.setToolTip("0 = Round, 100 = Razor Sharp")
-        self.sharp_slider.valueChanged.connect(lambda v: sharp_label.setText(f"Corner Sharpness: {v}"))
+        self.sharp_slider.valueChanged.connect(lambda v: self.sharp_label.setText(f"Corner Sharpness: {v}"))
         
-        sharp_layout.addWidget(sharp_label)
         sharp_layout.addWidget(self.sharp_slider)
         layout.addLayout(sharp_layout)
         
