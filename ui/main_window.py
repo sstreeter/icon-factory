@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QGroupBox, QRadioButton, QCheckBox,
     QSlider, QLineEdit, QProgressBar, QMessageBox, QColorDialog,
-    QSpinBox
+    QSpinBox, QTabWidget
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage, QDragEnterEvent, QDropEvent
@@ -17,6 +17,7 @@ import sys
 from core import ImageProcessor, AutoCropper, MaskingEngine, IconExporter, EdgeProcessor, BorderMasking
 from core.icon_audit import IconAuditor
 from ui.audit_dialog import AuditReportDialog
+from ui.widgets import TransparencyLabel
 from utils import ArchiveManager
 
 
@@ -141,17 +142,37 @@ class MainWindow(QMainWindow):
         
         layout.addLayout(studio_layout)
         
-        # Masking options
+        # Middle section: Tabbed Settings
+        self.tabs = QTabWidget()
+        
+        # Tab 1: Cleanup (Masking & Advanced Edge)
+        self.masking_tab = QWidget()
+        mask_tab_layout = QVBoxLayout()
         masking_group = self.create_masking_panel()
-        layout.addWidget(masking_group)
+        mask_tab_layout.addWidget(masking_group)
+        mask_tab_layout.addStretch() # Push to top
+        self.masking_tab.setLayout(mask_tab_layout)
+        self.tabs.addTab(self.masking_tab, "1. Cleanup")
         
-        # Geometry Settings (Phase 4)
+        # Tab 2: Geometry (Enforcer)
+        self.geometry_tab = QWidget()
+        geo_tab_layout = QVBoxLayout()
         geometry_group = self.create_geometry_panel()
-        layout.addWidget(geometry_group)
+        geo_tab_layout.addWidget(geometry_group)
+        geo_tab_layout.addStretch()
+        self.geometry_tab.setLayout(geo_tab_layout)
+        self.tabs.addTab(self.geometry_tab, "2. Geometry (Enforcer)")
         
-        # Export options
+        # Tab 3: Export
+        self.export_tab = QWidget()
+        export_tab_layout = QVBoxLayout()
         export_group = self.create_export_panel()
-        layout.addWidget(export_group)
+        export_tab_layout.addWidget(export_group)
+        export_tab_layout.addStretch()
+        self.export_tab.setLayout(export_tab_layout)
+        self.tabs.addTab(self.export_tab, "3. Export")
+        
+        layout.addWidget(self.tabs)
         
         # Icon name
         name_layout = QHBoxLayout()
@@ -192,18 +213,11 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         
         # Source viewing area (custom styled)
-        self.drop_label = QLabel("Drop Source Image Here")
-        self.drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Source viewing area (custom styled)
+        self.drop_label = TransparencyLabel()
+        self.drop_label.setText("Drop Source Image Here")
         self.drop_label.setMinimumSize(300, 300)
-        self.drop_label.setStyleSheet("""
-            QLabel {
-                border: 2px dashed #999;
-                border-radius: 4px;
-                background-color: #f0f0f0;
-                color: #666;
-                font-weight: bold;
-            }
-        """)
+        # We don't need stylesheet border/bg anymore as TransparencyLabel handles it
         layout.addWidget(self.drop_label, 1) # Stretch 1 to fill space
         
         # Info readout
@@ -236,16 +250,13 @@ class MainWindow(QMainWindow):
         # Artboard viewing area
         # We use a scroll area to handle zooming/panning in future, 
         # but for now it's a fixed viewport style
-        self.preview_label = QLabel()
-        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Artboard viewing area
+        # We use a scroll area to handle zooming/panning in future, 
+        # but for now it's a fixed viewport style
+        self.preview_label = TransparencyLabel()
+        self.preview_label.setText("Preview")
         self.preview_label.setMinimumSize(300, 300)
-        # Checkerboard background via stylesheet
-        self.preview_label.setStyleSheet("""
-            QLabel {
-                border: 1px solid #999;
-                background-color: #e0e0e0;
-            }
-        """)
+        # Background is handled by TransparencyLabel
         layout.addWidget(self.preview_label, 1) # Stretch 1
         
         # Tool Bar
