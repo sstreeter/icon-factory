@@ -96,7 +96,7 @@ class AuditReportDialog(QDialog):
         # Buttons
         btn_layout = QHBoxLayout()
         close_btn = QPushButton("Close")
-        close_btn.clicked.connect(self.accept)
+        close_btn.clicked.connect(self.reject)
         btn_layout.addWidget(close_btn)
         
         if has_errors or has_warnings:
