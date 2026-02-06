@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
         studio_layout = QHBoxLayout()
         
         # Left: Source Inspector
-        self.source_group = self.create_source_inspector()
+        self.source_group = self.create_source_inspector_v2()
         studio_layout.addWidget(self.source_group, 1)
         
         # Right: Artboard
@@ -721,7 +721,24 @@ class MainWindow(QMainWindow):
             # UI State Logic
             self.generate_btn.setEnabled(True)
             self.check_btn.setEnabled(True)
+            if hasattr(self, 'reveal_btn'):
+                self.reveal_btn.setEnabled(True)
+                self.reload_btn.setEnabled(True)
+                
             self.reset_ui_controls_after_commit()
+            
+            # Phase 11: Auto-Audit (Instant Feedback)
+            issues = IconAuditor.audit_image(self.processor.source_image)
+            if hasattr(self, 'approval_status_label'):
+                if not issues:
+                    self.approval_status_label.setText("✅ Source is Clean")
+                    self.approval_status_label.setStyleSheet("color: green; font-weight: bold;")
+                    # Optional: Disable Auto-Fix if clean? 
+                    # self.check_btn.setEnabled(False) # Maybe let them check anyway
+                else:
+                    count = len(issues)
+                    self.approval_status_label.setText(f"⚠️ {count} Issues Found")
+                    self.approval_status_label.setStyleSheet("color: red; font-weight: bold;")
             
             self.apply_masking()
             self.update_preview()
@@ -1111,3 +1128,104 @@ class MainWindow(QMainWindow):
                 "Error",
                 f"Failed to generate icons:\n{message}"
             )
+
+    def reveal_source_file(self):
+        """Reveal the current source file in Finder/Explorer (Escape Hatch)."""
+        if not self.current_source_path:
+            return
+            
+        path = str(Path(self.current_source_path).absolute())
+        
+        try:
+            if sys.platform == 'darwin':
+                import subprocess
+                subprocess.run(['open', '-R', path])
+            elif sys.platform == 'win32':
+                import subprocess
+                subprocess.run(['explorer', '/select,', path])
+            else:
+                # Linux fallback
+                import subprocess
+                subprocess.run(['xdg-open', str(Path(path).parent)])
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Could not reveal file:\n{e}")
+
+    def reload_source_file(self):
+        """Reload the source file from disk (Pull Manual Edits)."""
+        if not self.current_source_path:
+            return
+            
+        # Verify file exists
+        if not Path(self.current_source_path).exists():
+            QMessageBox.warning(self, "Error", "Source file no longer exists!")
+            return
+            
+        # Reload triggers full reset
+        self.load_image(self.current_source_path)
+        
+        QMessageBox.information(self, "Reloaded", "File reloaded from disk.\nMasking and Filters have been reset to match the new pixels.")
+
+    def create_source_inspector_v2(self):
+        """Phase 11: Updated Source Inspector (Escape Hatch & Feedback)."""
+        group = QGroupBox("Source Inspector (Original)")
+        layout = QVBoxLayout()
+        
+        # Status Bar
+        status_layout = QHBoxLayout()
+        self.approval_status_label = QLabel("Waiting for Source...")
+        self.approval_status_label.setStyleSheet("color: #666; font-weight: bold;")
+        self.approval_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status_layout.addWidget(self.approval_status_label)
+        layout.addLayout(status_layout)
+        
+        # Source viewing area
+        self.drop_label = TransparencyLabel()
+        self.drop_label.setText("Drop Source Image Here")
+        self.drop_label.setMinimumSize(300, 300)
+        # Skew Fix: Force Center, No Scale
+        self.drop_label.setScaledContents(False) 
+        self.drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.drop_label, 1) # Stretch 1
+        
+        # Info readout
+        self.source_info_label = QLabel("No image loaded")
+        self.source_info_label.setStyleSheet("color: #666; font-size: 11px;")
+        layout.addWidget(self.source_info_label)
+        
+        # Action Bar 1: Load/External
+        action_layout = QHBoxLayout()
+        choose_btn = QPushButton("📂 Open")
+        choose_btn.clicked.connect(self.choose_file)
+        action_layout.addWidget(choose_btn)
+        
+        self.reveal_btn = QPushButton("🔎 Reveal")
+        self.reveal_btn.setToolTip("Show in Finder/Explorer for Photoshop editing")
+        self.reveal_btn.setEnabled(False)
+        self.reveal_btn.clicked.connect(self.reveal_source_file)
+        action_layout.addWidget(self.reveal_btn)
+        
+        self.reload_btn = QPushButton("🔄 Reload")
+        self.reload_btn.setToolTip("Reload file from disk (after external edit)")
+        self.reload_btn.setEnabled(False)
+        self.reload_btn.clicked.connect(self.reload_source_file)
+        action_layout.addWidget(self.reload_btn)
+        
+        layout.addLayout(action_layout)
+        
+        # Action Bar 2: Audit/Commit
+        audit_layout = QHBoxLayout()
+        
+        self.check_btn = QPushButton("🩺 Check Icon")
+        self.check_btn.setEnabled(False)
+        self.check_btn.clicked.connect(self.run_icon_audit)
+        audit_layout.addWidget(self.check_btn)
+        
+        self.commit_btn = QPushButton("⬆ Commit Changes")
+        self.commit_btn.setToolTip("Save new version to history/ and Reload")
+        self.commit_btn.clicked.connect(self.promote_preview_to_source)
+        audit_layout.addWidget(self.commit_btn)
+        
+        layout.addLayout(audit_layout)
+        
+        group.setLayout(layout)
+        return group
