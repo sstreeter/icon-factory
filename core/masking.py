@@ -160,3 +160,57 @@ class MaskingEngine:
         dominant = color_counts.most_common(1)[0][0]
         
         return dominant
+
+    @staticmethod
+    def choke_mask(image: Image.Image, radius: int = 1) -> Image.Image:
+        """
+        Shrink the opaque area of the mask (Erode).
+        Essential for removing 'halos' or fringes around keyed subjects.
+        
+        Args:
+            image: Source RGBA image
+            radius: Amount to shrink in pixels
+            
+        Returns:
+            Image with eroded alpha channel
+        """
+        if radius <= 0:
+            return image
+            
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+            
+        # Extract alpha
+        r, g, b, a = image.split()
+        
+        # Erode alpha (MinFilter)
+        # 1px radius means looking at 3x3 window (radius=1)
+        # PIL MinFilter takes integer size (3, 5, 7...)
+        kernel_size = (int(radius) * 2) + 1
+        a_choked = a.filter(ImageFilter.MinFilter(kernel_size))
+        
+        return Image.merge('RGBA', (r, g, b, a_choked))
+
+    @staticmethod
+    def multi_color_mask(image: Image.Image, 
+                         target_colors: list[Tuple[int, int, int]],
+                         tolerance: int = 30) -> Image.Image:
+        """
+        Remove multiple specific colors from the image.
+        
+        Args:
+            image: Source image
+            target_colors: List of RGB colors to remove
+            tolerance: Color matching tolerance
+            
+        Returns:
+            Image with colors masked to transparent
+        """
+        if not target_colors:
+            return image
+            
+        img = image
+        for color in target_colors:
+            img = MaskingEngine.color_mask(img, color, tolerance)
+            
+        return img

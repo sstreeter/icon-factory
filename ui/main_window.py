@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.processor = ImageProcessor()
         self.current_mask_color = (255, 255, 255)
+        self.current_mask_color_2 = (255, 255, 255) # Secondary Key (Phase 9)
         self.init_ui()
     
     def init_ui(self):
@@ -355,12 +356,13 @@ class MainWindow(QMainWindow):
         mode_layout.addStretch()
         layout.addLayout(mode_layout)
         
-        # Color mask settings
+        # Color mask settings (The Masking Lab)
+        # 1. Primary Key
         color_layout = QHBoxLayout()
-        color_layout.addWidget(QLabel("Color:"))
+        color_layout.addWidget(QLabel("Primary Key:"))
         
-        self.color_btn = QPushButton("🎨 Pick")
-        self.color_btn.setFixedWidth(80)
+        self.color_btn = QPushButton("🎨 Pick Color 1")
+        self.color_btn.setFixedWidth(100)
         self.color_btn.clicked.connect(self.pick_color)
         color_layout.addWidget(self.color_btn)
         
@@ -374,6 +376,60 @@ class MainWindow(QMainWindow):
         
         color_layout.addStretch()
         layout.addLayout(color_layout)
+        
+        # 2. Secondary Key (Multi-Mask) - Phase 9
+        color_2_layout = QHBoxLayout()
+        self.enable_key_2 = QCheckBox("Secondary Key:")
+        self.enable_key_2.toggled.connect(self.apply_masking)
+        self.enable_key_2.toggled.connect(lambda c: self.color_btn_2.setEnabled(c))
+        color_2_layout.addWidget(self.enable_key_2)
+        
+        self.color_btn_2 = QPushButton("🎨 Pick Color 2")
+        self.color_btn_2.setFixedWidth(100)
+        self.color_btn_2.setEnabled(False)
+        self.color_btn_2.clicked.connect(self.pick_color_2)
+        color_2_layout.addWidget(self.color_btn_2)
+        
+        color_2_layout.addWidget(QLabel("Tolerance:"))
+        self.tolerance_spin_2 = QSpinBox()
+        self.tolerance_spin_2.setRange(0, 255)
+        self.tolerance_spin_2.setValue(30)
+        self.tolerance_spin_2.setSuffix(" px")
+        self.tolerance_spin_2.valueChanged.connect(self.apply_masking)
+        color_2_layout.addWidget(self.tolerance_spin_2)
+        
+        color_2_layout.addStretch()
+        layout.addLayout(color_2_layout)
+        
+        # 3. Mask Choke / Expand (Promoted to Main Panel)
+        choke_layout = QHBoxLayout()
+        choke_layout.addWidget(QLabel("Mask Choke:"))
+        
+        self.mask_choke_slider = QSlider(Qt.Orientation.Horizontal)
+        self.mask_choke_slider.setRange(-5, 5)
+        self.mask_choke_slider.setValue(0)
+        self.mask_choke_slider.setFixedWidth(150)
+        self.mask_choke_slider.setToolTip("Negative = Choke (Remove Fringe) | Positive = Expand")
+        
+        choke_label = QLabel("0 px")
+        self.mask_choke_slider.valueChanged.connect(lambda v: choke_label.setText(f"{v} px"))
+        self.mask_choke_slider.valueChanged.connect(self.apply_masking)
+        
+        choke_layout.addWidget(self.mask_choke_slider)
+        choke_layout.addWidget(choke_label)
+        
+        choke_help = self.create_help_btn(
+            "Mask Choke (Reduce Border)",
+            "<b>Controls the mask boundary.</b><br><br>"
+            "<ul>"
+            "<li><b>Negative (-1 to -5):</b> Choke/Shrink. REMOVES halos and fringes.</li>"
+            "<li><b>Positive (+1 to +5):</b> Expand/Grow. Recover lost edges.</li>"
+            "</ul>"
+        )
+        choke_layout.addWidget(choke_help)
+        choke_layout.addStretch()
+        layout.addLayout(choke_layout)
+        
         
         # Auto-crop after masking checkbox
         self.autocrop_after = QCheckBox("✂️ Auto-Crop After Masking (Crop to tight bounds after removing transparency)")
@@ -392,7 +448,6 @@ class MainWindow(QMainWindow):
             "<ul>"
             "<li><b>Defringe:</b> Removes color halos/fringing from transparent edges.</li>"
             "<li><b>Clean Edges:</b> Removes semi-transparent pixel debris.</li>"
-            "<li><b>Mask Adjust:</b> Expands or contracts the icon bounds.</li>"
             "<li><b>Edge Threshold:</b> Determines what opacity is considered 'solid'.</li>"
             "</ul>"
         )
@@ -429,22 +484,6 @@ class MainWindow(QMainWindow):
         self.clean_edges_check.setChecked(True)
         self.clean_edges_check.toggled.connect(self.apply_masking)
         controls_layout.addWidget(self.clean_edges_check)
-        
-        # Mask expansion with spinbox
-        expand_layout = QHBoxLayout()
-        expand_layout.addWidget(QLabel("Mask Adjust:"))
-        
-        self.mask_expand_spin = QSpinBox()
-        self.mask_expand_spin.setRange(-5, 5)
-        self.mask_expand_spin.setValue(0)
-        self.mask_expand_spin.setSuffix(" px")
-        self.mask_expand_spin.setSpecialValueText("No Change")
-        self.mask_expand_spin.valueChanged.connect(self.apply_masking)
-        expand_layout.addWidget(self.mask_expand_spin)
-        
-        expand_layout.addWidget(QLabel("(- = Contract, + = Expand)"))
-        expand_layout.addStretch()
-        controls_layout.addLayout(expand_layout)
         
         # Edge threshold with spinbox
         threshold_layout = QHBoxLayout()
@@ -724,9 +763,16 @@ class MainWindow(QMainWindow):
         # Apply basic masking
         if self.mask_autocrop.isChecked():
             img = AutoCropper.crop_to_content(img, padding=5)
+            
         elif self.mask_color.isChecked():
+            # Multi-Key Logic (Phase 9)
+            input_colors = [self.current_mask_color]
+            
+            if hasattr(self, 'enable_key_2') and self.enable_key_2.isChecked():
+                input_colors.append(self.current_mask_color_2)
+            
             tolerance = self.tolerance_spin.value()
-            img = MaskingEngine.color_mask(img, self.current_mask_color, tolerance)
+            img = MaskingEngine.multi_color_mask(img, input_colors, tolerance)
             
             # Auto-crop after if enabled
             if self.autocrop_after.isChecked():
@@ -741,6 +787,16 @@ class MainWindow(QMainWindow):
             if self.autocrop_after.isChecked():
                 img = AutoCropper.crop_to_content(img, padding=5)
         
+        # Mask Choke / Expand (Phase 9) - Apply BEFORE cleaning
+        # This removes fringes so the cleaner doesn't get confused
+        mask_adjust = self.mask_choke_slider.value()
+        if mask_adjust < 0:
+             # Choke (Erode) - Remove Fringe
+             img = MaskingEngine.choke_mask(img, abs(mask_adjust))
+        elif mask_adjust > 0:
+             # Expand (Dilate) - Recover Edge
+             img = EdgeProcessor.expand_mask(img, pixels=mask_adjust)
+        
         # ALWAYS apply quality enhancement (Clean by Default philosophy)
         threshold = self.edge_threshold_spin.value()
         img = EdgeProcessor.clean_edges(img, threshold=threshold, blur_radius=0.3)
@@ -750,20 +806,32 @@ class MainWindow(QMainWindow):
             if self.defringe_check.isChecked():
                 img = EdgeProcessor.defringe_simple(img, strength=0.7)
             
-            # Apply mask expansion/contraction
-            mask_adjust = self.mask_expand_spin.value()
-            if mask_adjust != 0:
-                img = EdgeProcessor.expand_mask(img, pixels=mask_adjust)
-        
+            # Clean Edges Checkbox
+            if self.clean_edges_check.isChecked():
+                 # We already did basic clean, this might be extra aggressiveness?
+                 # Actually clean_edges above is minimal. 
+                 pass 
+
         self.processor.apply_processed_image(img)
         self.update_preview()
     
     def pick_color(self):
-        """Open color picker dialog."""
+        """Open color picker dialog (Primary Key)."""
         color = QColorDialog.getColor()
         if color.isValid():
             self.current_mask_color = (color.red(), color.green(), color.blue())
             self.color_btn.setStyleSheet(
+                f"background-color: rgb({color.red()}, {color.green()}, {color.blue()});"
+            )
+            if self.mask_color.isChecked():
+                self.apply_masking()
+
+    def pick_color_2(self):
+        """Open color picker dialog (Secondary Key)."""
+        color = QColorDialog.getColor()
+        if color.isValid():
+            self.current_mask_color_2 = (color.red(), color.green(), color.blue())
+            self.color_btn_2.setStyleSheet(
                 f"background-color: rgb({color.red()}, {color.green()}, {color.blue()});"
             )
             if self.mask_color.isChecked():
@@ -962,8 +1030,15 @@ class MainWindow(QMainWindow):
         
         # 2. Cleanup Tab - Reset
         self.mask_none.setChecked(True) # Disable masking
+        
+        # Reset Masking Lab
+        self.mask_choke_slider.blockSignals(True)
+        self.mask_choke_slider.setValue(0)
+        self.mask_choke_slider.blockSignals(False)
+        if hasattr(self, 'enable_key_2'):
+            self.enable_key_2.setChecked(False)
+            
         self.defringe_check.setChecked(False)
-        self.edge_group_check.setChecked(False)
         self.edge_controls.setEnabled(False)
         
         # 3. Geometry Tab - Reset (Simulated)
