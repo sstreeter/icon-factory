@@ -398,6 +398,10 @@ class MainWindow(QMainWindow):
             self.current_source_path = path
             file_name = Path(path).stem
             self.drop_label.setText(f"Loaded: {file_name}")
+            
+            # Set default icon name (user can edit)
+            self.icon_name_input.setText(file_name)
+            
             self.generate_btn.setEnabled(True)
             self.apply_masking()
             self.update_preview()
