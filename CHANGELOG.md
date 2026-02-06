@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2026-02-06
+
+### Added
+- **Auto-Crop After Masking**: New checkbox to automatically crop to tight bounds after color/border masking
+  - Enabled by default for clean, professional results
+  - Solves issue with 2-color graphics having unwanted transparent padding
+  - Users can uncheck to preserve padding if desired
+  - Works with both "Remove Color (Entire Image)" and "Remove Color (Borders Only)" modes
+
+### Changed
+- Improved masking mode labels for better clarity:
+  - "None (Keep Original)"
+  - "Auto-Crop (Detect Content)"
+  - "Remove Color (Entire Image)"
+  - "Remove Color (Borders Only)"
+
 ## [1.0.3] - 2026-02-06
 
 ### Added

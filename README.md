@@ -43,9 +43,12 @@ python icon_factory.py
 
 ### Masking Modes
 
-- **None**: Use image as-is
-- **Auto-Crop**: Automatically crop to content bounds with optional padding
-- **Color Mask**: Remove a specific color (useful for removing backgrounds)
+- **None (Keep Original)**: Use image as-is
+- **Auto-Crop (Detect Content)**: Automatically crop to content bounds
+- **Remove Color (Entire Image)**: Remove a specific color from entire image
+  - ✂️ **Auto-Crop After Masking**: Automatically crop to tight bounds after removal (default ON)
+- **Remove Color (Borders Only)**: Magic wand - remove color from edges only
+  - ✂️ **Auto-Crop After Masking**: Automatically crop to tight bounds after removal (default ON)
 
 ### Export Options
 
