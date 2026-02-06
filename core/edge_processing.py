@@ -1,0 +1,227 @@
+"""
+Advanced masking and edge processing for Icon Factory.
+Includes defringe, edge cleanup, and mask expansion/contraction.
+"""
+
+from PIL import Image, ImageFilter, ImageChops
+import numpy as np
+from typing import Tuple
+
+
+class EdgeProcessor:
+    """Advanced edge processing and cleanup."""
+    
+    @staticmethod
+    def defringe(image: Image.Image, 
+                 radius: int = 1,
+                 threshold: int = 30) -> Image.Image:
+        """
+        Remove color fringing from edges (like Photoshop's Defringe).
+        This removes colored halos around transparent edges.
+        
+        Args:
+            image: Source RGBA image
+            radius: Defringe radius in pixels
+            threshold: Alpha threshold for edge detection
+            
+        Returns:
+            Defringed image
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+        
+        data = np.array(image, dtype=np.float32)
+        r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
+        
+        # Find edge pixels (semi-transparent)
+        edge_mask = (a > 0) & (a < 255 - threshold)
+        
+        # For edge pixels, blend with nearby opaque pixels
+        if np.any(edge_mask):
+            # Create a mask of fully opaque pixels
+            opaque_mask = a >= 255 - threshold
+            
+            # Dilate the opaque mask to find nearby opaque pixels
+            from scipy import ndimage
+            dilated_opaque = ndimage.binary_dilation(opaque_mask, iterations=radius)
+            
+            # For each edge pixel, average with nearby opaque pixels
+            for channel in [r, g, b]:
+                # Create weighted average based on alpha
+                channel_copy = channel.copy()
+                channel[edge_mask] = channel_copy[edge_mask] * 0.3 + \
+                                    np.mean(channel_copy[dilated_opaque]) * 0.7
+        
+        # Reconstruct image
+        result = np.stack([r, g, b, a], axis=2).astype(np.uint8)
+        return Image.fromarray(result, 'RGBA')
+    
+    @staticmethod
+    def defringe_simple(image: Image.Image, strength: float = 0.5) -> Image.Image:
+        """
+        Simplified defringe that doesn't require scipy.
+        Removes color from semi-transparent edges.
+        
+        Args:
+            image: Source RGBA image
+            strength: Defringe strength (0-1)
+            
+        Returns:
+            Defringed image
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+        
+        data = np.array(image, dtype=np.float32)
+        r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
+        
+        # Find semi-transparent pixels
+        edge_mask = (a > 0) & (a < 200)
+        
+        # Reduce color intensity on edges based on alpha
+        alpha_factor = (a / 255.0) ** (1.0 + strength)
+        
+        r = r * alpha_factor
+        g = g * alpha_factor
+        b = b * alpha_factor
+        
+        result = np.stack([r, g, b, a], axis=2).astype(np.uint8)
+        return Image.fromarray(result, 'RGBA')
+    
+    @staticmethod
+    def expand_mask(image: Image.Image, pixels: int = 1) -> Image.Image:
+        """
+        Expand the alpha mask outward (choke/spread).
+        
+        Args:
+            image: Source RGBA image
+            pixels: Number of pixels to expand (positive) or contract (negative)
+            
+        Returns:
+            Image with expanded mask
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+        
+        # Extract alpha channel
+        alpha = image.split()[3]
+        
+        if pixels > 0:
+            # Expand (dilate)
+            for _ in range(pixels):
+                alpha = alpha.filter(ImageFilter.MaxFilter(3))
+        elif pixels < 0:
+            # Contract (erode)
+            for _ in range(abs(pixels)):
+                alpha = alpha.filter(ImageFilter.MinFilter(3))
+        
+        # Apply modified alpha
+        result = image.copy()
+        result.putalpha(alpha)
+        
+        return result
+    
+    @staticmethod
+    def clean_edges(image: Image.Image, 
+                   threshold: int = 10,
+                   blur_radius: float = 0.5) -> Image.Image:
+        """
+        Clean up edge artifacts and pixel debris.
+        
+        Args:
+            image: Source RGBA image
+            threshold: Minimum alpha to keep (removes very faint pixels)
+            blur_radius: Slight blur to smooth edges
+            
+        Returns:
+            Cleaned image
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+        
+        data = np.array(image)
+        alpha = data[:, :, 3]
+        
+        # Remove pixels below threshold (debris)
+        alpha[alpha < threshold] = 0
+        
+        # Apply slight blur to smooth edges
+        if blur_radius > 0:
+            alpha_img = Image.fromarray(alpha, 'L')
+            alpha_img = alpha_img.filter(ImageFilter.GaussianBlur(blur_radius))
+            alpha = np.array(alpha_img)
+        
+        data[:, :, 3] = alpha
+        
+        return Image.fromarray(data, 'RGBA')
+    
+    @staticmethod
+    def remove_matte(image: Image.Image, 
+                     matte_color: Tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
+        """
+        Remove color matte from semi-transparent edges.
+        Useful when image was composited on a colored background.
+        
+        Args:
+            image: Source RGBA image
+            matte_color: RGB color of the matte to remove
+            
+        Returns:
+            Image with matte removed
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+        
+        data = np.array(image, dtype=np.float32)
+        r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
+        
+        # Normalize alpha
+        alpha_norm = a / 255.0
+        alpha_norm = np.maximum(alpha_norm, 0.001)  # Avoid division by zero
+        
+        # Remove matte color
+        mr, mg, mb = matte_color
+        
+        r = (r - mr * (1 - alpha_norm)) / alpha_norm
+        g = (g - mg * (1 - alpha_norm)) / alpha_norm
+        b = (b - mb * (1 - alpha_norm)) / alpha_norm
+        
+        # Clamp values
+        r = np.clip(r, 0, 255)
+        g = np.clip(g, 0, 255)
+        b = np.clip(b, 0, 255)
+        
+        result = np.stack([r, g, b, a], axis=2).astype(np.uint8)
+        return Image.fromarray(result, 'RGBA')
+    
+    @staticmethod
+    def sharpen_edges(image: Image.Image, strength: float = 1.0) -> Image.Image:
+        """
+        Sharpen edges while preserving transparency.
+        
+        Args:
+            image: Source RGBA image
+            strength: Sharpening strength
+            
+        Returns:
+            Sharpened image
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+        
+        # Extract alpha
+        alpha = image.split()[3]
+        
+        # Sharpen RGB
+        rgb = image.convert('RGB')
+        sharpened = rgb.filter(ImageFilter.UnsharpMask(
+            radius=1.0,
+            percent=int(150 * strength),
+            threshold=3
+        ))
+        
+        # Recombine with alpha
+        result = sharpened.convert('RGBA')
+        result.putalpha(alpha)
+        
+        return result
