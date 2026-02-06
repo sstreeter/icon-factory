@@ -674,30 +674,43 @@ class MainWindow(QMainWindow):
             w, h = self.processor.source_image.size
             self.source_info_label.setText(f"File: {file_name} | Size: {w}x{h}")
             
-            # Show Source Image in Inspector
-            # Convert PIL to QPixmap
-            src_img = self.processor.source_image.copy()
-            if src_img.mode != 'RGBA':
-                src_img = src_img.convert('RGBA')
-                
-            data = src_img.tobytes('raw', 'RGBA')
-            qimage = QImage(data, w, h, QImage.Format.Format_RGBA8888)
-            pixmap = QPixmap.fromImage(qimage)
-            
-            # Scale to fit label (Keep Aspect Ratio)
-            # Max size 300x300 roughly based on layout
-            pixmap = pixmap.scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            
-            self.drop_label.setPixmap(pixmap)
-            self.drop_label.setText("") # Clear text
+            self.load_source_preview()
             
             # Set default icon name (user can edit)
             self.icon_name_input.setText(file_name)
             
+            # UI State Logic
             self.generate_btn.setEnabled(True)
-            self.check_btn.setEnabled(True) # Enable Icon Doctor
+            self.check_btn.setEnabled(True)
+            self.reset_ui_controls_after_commit()
+            
             self.apply_masking()
             self.update_preview()
+
+    def load_source_preview(self):
+        """Update the Source Inspector with the current source image."""
+        if not self.processor.source_image:
+            return
+            
+        w, h = self.processor.source_image.size
+        
+        # Convert PIL to QPixmap
+        src_img = self.processor.source_image.copy()
+        if src_img.mode != 'RGBA':
+            src_img = src_img.convert('RGBA')
+            
+        data = src_img.tobytes('raw', 'RGBA')
+        qimage = QImage(data, w, h, QImage.Format.Format_RGBA8888)
+        pixmap = QPixmap.fromImage(qimage)
+        
+        # Scale to fit label (Keep Aspect Ratio)
+        # Max size 300x300 roughly based on layout
+        pixmap = pixmap.scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        
+        self.drop_label.setPixmap(pixmap)
+        self.drop_label.setText("") # Clear text
+            
+
     
     def apply_masking(self):
         """Apply selected masking mode."""
