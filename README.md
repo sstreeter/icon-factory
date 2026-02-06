@@ -36,9 +36,10 @@ python icon_factory.py
 ### Quick Start
 
 1. Drag and drop an image or click "Choose File..."
-2. Select masking mode (None, Auto-Crop, or Color Mask)
-3. Choose export formats (Windows ICO, Mac ICNS, PNG Set)
-4. Click "Generate Icons"
+2. **Edit the icon name** if desired (defaults to source filename)
+3. Select masking mode (None, Auto-Crop, or Color Mask)
+4. Choose export formats (Windows ICO, Mac ICNS, PNG Set)
+5. Click "Generate Icons"
 
 ### Masking Modes
 
@@ -74,7 +75,12 @@ icon-name/
     ├── icon_16.png
     ├── icon_32.png
     ├── icon_48.png
-    └── ...
+    ├── icon_64.png
+    ├── icon_100.png  # Perfect for web forms
+    ├── icon_128.png
+    ├── icon_256.png
+    ├── icon_512.png
+    └── icon_1024.png
 ```
 
 ## Requirements
