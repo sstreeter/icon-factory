@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage, QDragEnterEvent, QDropEvent
-from PIL import Image
+from PIL import Image, ImageChops
 from pathlib import Path
 import sys
 
@@ -990,6 +990,14 @@ class MainWindow(QMainWindow):
         if not self.processor.processed_image:
             return
             
+        # Check for changes (Phase 14)
+        if self.processor.source_image:
+            diff = ImageChops.difference(self.processor.source_image, self.processor.processed_image)
+            if not diff.getbbox():
+                if confirm:
+                     QMessageBox.warning(self, "No Changes", "You haven't made any changes yet!")
+                return 
+            
         if confirm:
             reply = QMessageBox.question(
                 self, 
@@ -1243,16 +1251,14 @@ class MainWindow(QMainWindow):
         return group
 
     def populate_history_combo(self, current_path: str):
-        """Populate history dropdown with versions of the current file."""
+        """Populate history dropdown with ALL versions (Unified Timeline)."""
         if not hasattr(self, 'history_combo'):
             return
             
         self.history_combo.blockSignals(True)
         self.history_combo.clear()
         
-        # 1. Identify Base Stem
-        # Logic: If current is 'logo_v2026...', base is 'logo'.
-        # If current is 'logo.png', base is 'logo'.
+        # 1. Identify Base Stem (Root of the Timeline)
         current_stem = Path(current_path).stem
         import re
         base_stem = re.sub(r'_v\d{14}$', '', current_stem)
@@ -1260,14 +1266,9 @@ class MainWindow(QMainWindow):
         history_dir = Path("history")
         versions = []
         
-        # 2. Add Original (if it exists in root or elsewhere?)
-        # For this simplified version, we just scan what's in history/ + current
-        # Actually, we should look for files in history/ matching base_stem_v*.png
-        
+        # 2. Add History Versions
         if history_dir.exists():
             for f in history_dir.glob(f"{base_stem}_v*.png"):
-                # Extract timestamp for display
-                # Format: name_vYYYYMMDDHHMMSS.png
                 try:
                     ts_str = f.stem.split('_v')[-1]
                     from datetime import datetime
@@ -1275,7 +1276,7 @@ class MainWindow(QMainWindow):
                     display_time = dt.strftime("%H:%M:%S")
                     versions.append({
                         'path': str(f.absolute()),
-                        'name': f"v.{ts_str[-6:]} ({display_time})", # Short hash-like + time
+                        'name': f"v.{ts_str[-6:]} ({display_time})", 
                         'ts': ts_str
                     })
                 except:
@@ -1284,13 +1285,42 @@ class MainWindow(QMainWindow):
         # Sort by timestamp descending (newest first)
         versions.sort(key=lambda x: x['ts'], reverse=True)
         
-        # Add to Combo
-        self.history_combo.addItem("Current (Latest)", current_path)
+        # 3. Add Items to Combo (Unified List)
+        # Scan list to find which one is "Current"
+        current_idx = 0 
         
-        for v in versions:
-            # Don't add if it's the exact same file as current
-            if v['path'] != str(Path(current_path).absolute()):
-                 self.history_combo.addItem(v['name'], v['path'])
+        # Add matches
+        for i, v in enumerate(versions):
+            item_name = v['name']
+            item_path = v['path']
+            
+            # Check if this is the active file
+            if item_path == str(Path(current_path).absolute()):
+                 item_name += " (Active)"
+                 current_idx = i
+                 
+            self.history_combo.addItem(item_name, item_path)
+            
+        # If the list is empty (first time load), or current path isn't in history logic 
+        # (maybe it's the original file in root), we should append it or handle it.
+        # Ideally, we want the timeline to include everything.
+        
+        # Check if current_path is effectively "Original" (no version in name)
+        # If it's not in the versions list, it might be the root file.
+        # Let's verify if current selection was found.
+        found_active = False
+        for i in range(self.history_combo.count()):
+            if self.history_combo.itemData(i) == str(Path(current_path).absolute()):
+                self.history_combo.setCurrentIndex(i)
+                found_active = True
+                break
+                
+        if not found_active:
+             # Current file is likely the Original Source (root folder)
+             # Add it at the end? Or beginning?
+             # Let's add it as "Original Source"
+             self.history_combo.addItem(f"Original Source (Active)", str(Path(current_path).absolute()))
+             self.history_combo.setCurrentIndex(self.history_combo.count() - 1)
                  
         self.history_combo.setEnabled(True)
         self.history_combo.blockSignals(False)
