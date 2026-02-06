@@ -163,14 +163,23 @@ class MainWindow(QMainWindow):
         self.geometry_tab.setLayout(geo_tab_layout)
         self.tabs.addTab(self.geometry_tab, "2. Geometry (Enforcer)")
         
-        # Tab 3: Export
+        # Tab 3: Stroke & Polish (Phase 8)
+        self.stroke_tab = QWidget()
+        stroke_tab_layout = QVBoxLayout()
+        stroke_group = self.create_stroke_panel()
+        stroke_tab_layout.addWidget(stroke_group)
+        stroke_tab_layout.addStretch()
+        self.stroke_tab.setLayout(stroke_tab_layout)
+        self.tabs.addTab(self.stroke_tab, "3. Stroke & Polish")
+        
+        # Tab 4: Export (Moved)
         self.export_tab = QWidget()
         export_tab_layout = QVBoxLayout()
         export_group = self.create_export_panel()
         export_tab_layout.addWidget(export_group)
         export_tab_layout.addStretch()
         self.export_tab.setLayout(export_tab_layout)
-        self.tabs.addTab(self.export_tab, "3. Export")
+        self.tabs.addTab(self.export_tab, "4. Export")
         
         layout.addWidget(self.tabs)
         
@@ -579,6 +588,53 @@ class MainWindow(QMainWindow):
         
         group.setLayout(layout)
         return group
+        
+    def create_stroke_panel(self):
+        """Phase 8: Create 'Stroke & Polish' panel."""
+        group = QGroupBox("Stroke Engine & Polish")
+        layout = QVBoxLayout()
+        
+        # Helper method for sliders to reduce code duplication
+        def add_slider(name, min_val, max_val, default_val, tooltip, help_content):
+            row = QHBoxLayout()
+            
+            # Header
+            lbl_layout = QHBoxLayout()
+            label = QLabel(f"{name}: {default_val}")
+            lbl_layout.addWidget(label)
+            lbl_layout.addWidget(self.create_help_btn("Stroke Engine", help_content))
+            lbl_layout.addStretch()
+            row.addLayout(lbl_layout)
+            
+            slider = QSlider(Qt.Orientation.Horizontal)
+            slider.setRange(min_val, max_val)
+            slider.setValue(default_val)
+            slider.setToolTip(tooltip)
+            
+            # Signals
+            slider.valueChanged.connect(lambda v: label.setText(f"{name}: {v}"))
+            slider.valueChanged.connect(self.apply_smart_cleanup) # Auto-apply
+            
+            layout.addLayout(row)
+            layout.addWidget(slider)
+            return slider, label
+
+        # Stroke Weight (-10 to 10)
+        self.stroke_slider, self.stroke_label = add_slider(
+            "Stroke Weight (Boldness)", -10, 10, 0,
+            "Thicken or Thin the lines.",
+            "<b>Stroke Weight (-10 to +10):</b><br>Controls line thickness reconstruction.<br><ul><li><b>Positive (+):</b> Dilate/Grow the shape (Bold). Good for restoring borders.</li><li><b>Negative (-):</b> Erode/Shrink (Thin).</li><li><b>0:</b> Faithful.</li></ul>"
+        )
+        
+        # Post Sharpen (0-100)
+        self.sharpen_slider, self.sharpen_label = add_slider(
+            "Resolution Snap (Sharpen)", 0, 100, 0,
+            "Contrast enhancement at edges.",
+            "<b>Resolution Snap (0-100):</b><br>Applies a final Unsharp Mask pass.<br>Use this to make the icon look crisp and 'snap' to the pixel grid after resizing."
+        )
+        
+        group.setLayout(layout)
+        return group
     
     def update_ui_state(self):
         """Update UI state based on settings."""
@@ -821,8 +877,14 @@ class MainWindow(QMainWindow):
         # Note: smart_cleanup now handles internal padding to fix border artifacts
         smoothing = self.smooth_slider.value()
         sharpness = self.sharp_slider.value()
+        stroke = self.stroke_slider.value()
+        sharpen = self.sharpen_slider.value()
         
-        img = EdgeProcessor.smart_cleanup(img, smoothing_strength=smoothing, corner_sharpness=sharpness)
+        img = EdgeProcessor.smart_cleanup(img, 
+                                        smoothing_strength=smoothing, 
+                                        corner_sharpness=sharpness,
+                                        stroke_weight=stroke,
+                                        sharpen_amount=sharpen)
         
         self.processor.apply_processed_image(img)
         self.update_preview()
@@ -873,6 +935,17 @@ class MainWindow(QMainWindow):
         self.sharp_slider.setValue(50) 
         self.sharp_slider.blockSignals(False)
         self.sharp_label.setText("Corner Sharpness: 50")
+        
+        # Stroke Engine - Reset to Neutral
+        self.stroke_slider.blockSignals(True)
+        self.stroke_slider.setValue(0)
+        self.stroke_slider.blockSignals(False)
+        self.stroke_label.setText("Stroke Weight (Boldness): 0")
+        
+        self.sharpen_slider.blockSignals(True)
+        self.sharpen_slider.setValue(0)
+        self.sharpen_slider.blockSignals(False)
+        self.sharpen_label.setText("Resolution Snap (Sharpen): 0")
         
         # 2. Cleanup Tab - Reset
         self.mask_none.setChecked(True) # Disable masking

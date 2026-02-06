@@ -229,7 +229,9 @@ class EdgeProcessor:
     @staticmethod
     def smart_cleanup(image: Image.Image, 
                      smoothing_strength: int = 50, 
-                     corner_sharpness: int = 50) -> Image.Image:
+                     corner_sharpness: int = 50,
+                     stroke_weight: int = 0,
+                     sharpen_amount: int = 0) -> Image.Image:
         """
         Reconstruct jagged edges using Super-Sampling technique.
         Synthesizes vector-like quality from pixelated/jagged sources.
@@ -238,6 +240,8 @@ class EdgeProcessor:
             image: Source RGBA image
             smoothing_strength: 0-100 (0=Faithful, 100=Geometric/Abstract)
             corner_sharpness: 0-100 (0=Round, 100=Sharp)
+            stroke_weight: -10 to +10 (Negative=Thin, Positive=Bold)
+            sharpen_amount: 0-100 (Contrast at edges)
             
         Returns:
             Reconstructed 'clean' image
@@ -293,6 +297,23 @@ class EdgeProcessor:
         else:
             a_opened = a_binary
         
+        # 3b. Stroke Weight (Boldness) - Phase 8
+        # Execute after smoothing but before blur
+        # stroke_weight: -10 to +10 (Negative=Thin/Erode, Positive=Bold/Dilate)
+        if stroke_weight != 0:
+            weight = int(abs(stroke_weight))
+            # Ensure odd kernel size >= 3 logic if needed, but Min/Max filters work with any size in newer PIL, 
+            # though odd is safer. Let's stick to standard behavior.
+            # actually MaxFilter/MinFilter just need an integer size.
+            
+            if weight > 0:
+                if stroke_weight > 0:
+                    # Positive = Bold = Dilate (MaxFilter)
+                    a_opened = a_opened.filter(ImageFilter.MaxFilter(weight))
+                else:
+                    # Negative = Thin = Erode (MinFilter)
+                    a_opened = a_opened.filter(ImageFilter.MinFilter(weight))
+
         # 4. Soft Anti-Aliasing (Corner Sharpness)
         # Calculate blur radius based on sharpness (0-100 -> 4.0-0.0px)
         # Sharpness 50 -> 2.0px (Current default)
@@ -302,6 +323,13 @@ class EdgeProcessor:
         
         # Blur slightly at high res to create smooth transition
         a_smooth = a_opened.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+        
+        # 5. Final Polish (Sharpening) - Phase 8
+        # Apply UnsharpMask to the Alpha channel to "snap" the edges
+        if sharpen_amount > 0:
+            # Map 0-100 to Percent 0-200 usually works well
+            percent = int(sharpen_amount * 2) 
+            a_smooth = a_smooth.filter(ImageFilter.UnsharpMask(radius=2, percent=percent, threshold=3))
         
         # Recombine high-res image
         high_res_clean = Image.merge('RGBA', (r, g, b, a_smooth))
