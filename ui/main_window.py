@@ -147,6 +147,14 @@ class MainWindow(QMainWindow):
         export_group = self.create_export_panel()
         layout.addWidget(export_group)
         
+        # Icon name
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("Icon Name:"))
+        self.icon_name_input = QLineEdit()
+        self.icon_name_input.setPlaceholderText("Enter icon name (defaults to source filename)")
+        name_layout.addWidget(self.icon_name_input)
+        layout.addLayout(name_layout)
+        
         # Output directory
         output_layout = QHBoxLayout()
         output_layout.addWidget(QLabel("Output:"))
@@ -479,8 +487,10 @@ class MainWindow(QMainWindow):
         if not self.processor.processed_image:
             return
         
-        # Get icon name
-        icon_name = Path(self.current_source_path).stem
+        # Get icon name (use custom name if provided, otherwise use source filename)
+        icon_name = self.icon_name_input.text().strip()
+        if not icon_name:
+            icon_name = Path(self.current_source_path).stem
         
         # Prepare settings
         settings = {
