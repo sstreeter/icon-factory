@@ -63,10 +63,15 @@ class IconAuditor:
         # 2. Alpha/Edge Analysis
         alpha = np.array(image.split()[3])
         
-        # Calculate 'Jaggedness' metric
-        # High variance in local alpha gradients usually means jagged edges or noise
-        # This is a simplified heuristic
-        if np.std(alpha) > 0: # If not fully opaque/transparent
+        # Check if fully opaque
+        if np.min(alpha) == 255:
+            issues.append(AuditIssue(
+                "Transparency",
+                IssueSeverity.INFO,
+                "Image is fully opaque. Use 'Masking Options' to remove background if this is a logo/icon.",
+                fix_available=False
+            ))
+        elif np.std(alpha) > 0: # If not fully opaque/transparent
             # Check for hard, aliased edges (binary alpha transitions without smoothing)
             # Count pixels with intermediate alpha (1-254)
             intermediate_pixels = np.sum((alpha > 0) & (alpha < 255))
