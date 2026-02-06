@@ -244,12 +244,6 @@ class MainWindow(QMainWindow):
             QLabel {
                 border: 1px solid #999;
                 background-color: #e0e0e0;
-                background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), 
-                                  linear-gradient(-45deg, #ccc 25%, transparent 25%), 
-                                  linear-gradient(45deg, transparent 75%, #ccc 75%), 
-                                  linear-gradient(-45deg, transparent 75%, #ccc 75%);
-                background-size: 20px 20px;
-                background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
             }
         """)
         layout.addWidget(self.preview_label, 1) # Stretch 1
@@ -568,6 +562,11 @@ class MainWindow(QMainWindow):
         group.setLayout(layout)
         return group
     
+    def update_ui_state(self):
+        """Update UI state based on settings."""
+        if hasattr(self, 'edge_controls') and hasattr(self, 'edge_group_check'):
+            self.edge_controls.setEnabled(self.edge_group_check.isChecked())
+            
     def dragEnterEvent(self, event: QDragEnterEvent):
         """Handle drag enter event."""
         if event.mimeData().hasUrls():
