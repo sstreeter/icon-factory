@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QGroupBox, QRadioButton, QCheckBox,
     QSlider, QLineEdit, QProgressBar, QMessageBox, QColorDialog,
-    QSpinBox, QTabWidget
+    QSpinBox, QTabWidget, QComboBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage, QDragEnterEvent, QDropEvent
@@ -740,6 +740,10 @@ class MainWindow(QMainWindow):
                     self.approval_status_label.setText(f"⚠️ {count} Issues Found")
                     self.approval_status_label.setStyleSheet("color: red; font-weight: bold;")
             
+            # Phase 13: Update History
+            if hasattr(self, 'populate_history_combo'):
+                self.populate_history_combo(path)
+            
             self.apply_masking()
             self.update_preview()
 
@@ -1189,6 +1193,16 @@ class MainWindow(QMainWindow):
         self.source_info_label.setStyleSheet("color: #666; font-size: 11px;")
         layout.addWidget(self.source_info_label)
         
+        # History / Version Control (Phase 13)
+        history_layout = QHBoxLayout()
+        history_layout.addWidget(QLabel("Version:"))
+        self.history_combo = QComboBox()
+        self.history_combo.addItem("Current (Latest)")
+        self.history_combo.setEnabled(False)
+        self.history_combo.currentIndexChanged.connect(self.load_history_version)
+        history_layout.addWidget(self.history_combo, 1) # Stretch
+        layout.addLayout(history_layout)
+        
         # Action Bar 1: Load/External
         action_layout = QHBoxLayout()
         choose_btn = QPushButton("📂 Open")
@@ -1226,3 +1240,68 @@ class MainWindow(QMainWindow):
         
         group.setLayout(layout)
         return group
+        return group
+
+    def populate_history_combo(self, current_path: str):
+        """Populate history dropdown with versions of the current file."""
+        if not hasattr(self, 'history_combo'):
+            return
+            
+        self.history_combo.blockSignals(True)
+        self.history_combo.clear()
+        
+        # 1. Identify Base Stem
+        # Logic: If current is 'logo_v2026...', base is 'logo'.
+        # If current is 'logo.png', base is 'logo'.
+        current_stem = Path(current_path).stem
+        import re
+        base_stem = re.sub(r'_v\d{14}$', '', current_stem)
+        
+        history_dir = Path("history")
+        versions = []
+        
+        # 2. Add Original (if it exists in root or elsewhere?)
+        # For this simplified version, we just scan what's in history/ + current
+        # Actually, we should look for files in history/ matching base_stem_v*.png
+        
+        if history_dir.exists():
+            for f in history_dir.glob(f"{base_stem}_v*.png"):
+                # Extract timestamp for display
+                # Format: name_vYYYYMMDDHHMMSS.png
+                try:
+                    ts_str = f.stem.split('_v')[-1]
+                    from datetime import datetime
+                    dt = datetime.strptime(ts_str, "%Y%m%d%H%M%S")
+                    display_time = dt.strftime("%H:%M:%S")
+                    versions.append({
+                        'path': str(f.absolute()),
+                        'name': f"v.{ts_str[-6:]} ({display_time})", # Short hash-like + time
+                        'ts': ts_str
+                    })
+                except:
+                    continue
+                    
+        # Sort by timestamp descending (newest first)
+        versions.sort(key=lambda x: x['ts'], reverse=True)
+        
+        # Add to Combo
+        self.history_combo.addItem("Current (Latest)", current_path)
+        
+        for v in versions:
+            # Don't add if it's the exact same file as current
+            if v['path'] != str(Path(current_path).absolute()):
+                 self.history_combo.addItem(v['name'], v['path'])
+                 
+        self.history_combo.setEnabled(True)
+        self.history_combo.blockSignals(False)
+
+    def load_history_version(self):
+        """Load selected version from history."""
+        # Get data from selected item
+        path = self.history_combo.currentData()
+        if path and Path(path).exists():
+            # Load it (this triggers standard load pipeline)
+            self.load_image(path)
+            
+            # Note: load_image will call populate_history_combo again via the integration step we are about to do.
+            # So we don't need to manually update selection here.
