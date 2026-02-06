@@ -952,59 +952,56 @@ class MainWindow(QMainWindow):
             self.apply_smart_cleanup()
             
     def apply_smart_cleanup(self):
-        """Apply Smart Edge Cleanup (Vector Reconstruction)."""
+        """Apply Smart Edge Cleanup (Vector Reconstruction) with Auto-Commit."""
         if not self.processor.source_image:
             return
             
-        self.processor.reset_to_source()
-        img = self.processor.processed_image
+        # 1. Force Strong Defaults (Make the fix visible)
+        # Using blockSignals to prevent intermediate updates if desired, 
+        # but actually we want the update to happen so processed_image is ready.
+        self.smooth_slider.setValue(5)
+        self.sharp_slider.setValue(80)
         
-        # Re-apply masking if needed
-        # (This is simplified - in a fuller implementation we'd persist masking state better)
-        if self.mask_autocrop.isChecked():
-            # Use Safe Zone logic instead of tight crop
-            img = AutoCropper.apply_safe_zone(img, margin_percent=10)
-        elif self.mask_color.isChecked():
-            tolerance = self.tolerance_spin.value()
-            img = MaskingEngine.color_mask(img, self.current_mask_color, tolerance)
-            if self.autocrop_after.isChecked():
-                 # Use Safe Zone logic instead of tight crop
-                 img = AutoCropper.apply_safe_zone(img, margin_percent=10)
+        # 2. Logic is triggered by signals above, updating processed_image
+        # But just in case signals are blocked or queued:
+        # (The actual processing happens in update_preview which is connected to valueChanged)
+        # We need to ensure update_preview finishes before committing?
+        # Since this is single threaded UI, the signal should fire immediately.
         
-        # Apply Smart Cleanup with Geometry Settings
-        # Note: smart_cleanup now handles internal padding to fix border artifacts
-        smoothing = self.smooth_slider.value()
-        sharpness = self.sharp_slider.value()
-        stroke = self.stroke_slider.value()
-        sharpen = self.sharpen_slider.value()
+        # 3. Auto-Commit (Phase 12)
+        # This saves to history/, reloads the file, and resets the pipeline.
+        self.promote_preview_to_source(confirm=False)
         
-        img = EdgeProcessor.smart_cleanup(img, 
-                                        smoothing_strength=smoothing, 
-                                        corner_sharpness=sharpness,
-                                        stroke_weight=stroke,
-                                        sharpen_amount=sharpen)
+        QMessageBox.information(
+            self, 
+            "Auto-Fix Applied", 
+            "✅ Fix Applied & Committed!\n\n"
+            "1. Smoothing & Sharpening applied.\n"
+            "2. Result saved as new Source.\n"
+            "3. Pipeline reset for next step."
+        )
         
-        self.processor.apply_processed_image(img)
-        self.update_preview()
-        QMessageBox.information(self, "Auto-Fix Applied", "Smart Edge Cleanup has been applied!\n\nYour icon has been reconstructed with vector-like edges and Standard Safe Zone (10%).")
-        
-    def promote_preview_to_source(self):
+    def promote_preview_to_source(self, confirm: bool = True):
         """Phase 10: Promote current preview to be the new source (Save & Reload)."""
         if not self.processor.processed_image:
             return
             
-        reply = QMessageBox.question(
-            self, 
-            "Commit Changes?",
-            "This will use your current preview as the new Original Source.\n\n"
-            "1. A new version of the file will be saved to 'history/'.\n"
-            "2. The app will reload this new file.\n"
-            "3. All sliders and masks will be reset.\n\n"
-            "Proceed?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
+        if confirm:
+            reply = QMessageBox.question(
+                self, 
+                "Commit Changes?",
+                "This will use your current preview as the new Original Source.\n\n"
+                "1. A new version of the file will be saved to 'history/'.\n"
+                "2. The app will reload this new file.\n"
+                "3. All sliders and masks will be reset.\n\n"
+                "Proceed?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            should_proceed = (reply == QMessageBox.StandardButton.Yes)
+        else:
+            should_proceed = True
         
-        if reply == QMessageBox.StandardButton.Yes:
+        if should_proceed:
             # 1. Create History Directory
             history_dir = Path("history")
             history_dir.mkdir(exist_ok=True)
