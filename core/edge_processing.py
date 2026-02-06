@@ -274,10 +274,18 @@ class EdgeProcessor:
         
         # 3. Morphological Opening (Wart Removal / Smoothing)
         # Calculate kernel size based on strength (0-100 -> 0-25px)
-        # Strength 50 -> ~12px (Current default)
         struct_size = int(smoothing_strength * 0.25)
         
-        if struct_size > 0:
+        # MinFilter/MaxFilter require odd integer size >= 3
+        if struct_size < 3:
+            if smoothing_strength > 0:
+                struct_size = 3
+            else:
+                struct_size = 0
+        elif struct_size % 2 == 0:
+            struct_size += 1
+            
+        if struct_size >= 3:
             # Erode (MinFilter): Eats away small protrusions ("warts")
             # Dilate (MaxFilter): Grows back the main shape
             a_eroded = a_binary.filter(ImageFilter.MinFilter(struct_size))
