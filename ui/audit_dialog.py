@@ -1,3 +1,7 @@
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QLabel, QScrollArea, QWidget, 
+    QGroupBox, QHBoxLayout, QPushButton
+)
 
 class AuditReportDialog(QDialog):
     """Dialog to show icon audit results."""
