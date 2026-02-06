@@ -277,13 +277,18 @@ class EdgeProcessor:
         a_arr = np.where(a_arr > 127, 255, 0).astype(np.uint8)
         a_binary = Image.fromarray(a_arr, 'L')
         
-        # 3. Denoise (Remove Dirty Pixels)
-        # Median filter removes salt-and-pepper noise (stray pixels)
-        a_denoised = a_binary.filter(ImageFilter.MedianFilter(size=5))
+        # 3. Morphological Opening (Wart Removal / Smoothing)
+        # We use a large kernel because we are at 4x scale.
+        # Erode (MinFilter): Eats away small protrusions ("warts")
+        # Dilate (MaxFilter): Grows back the main shape
+        # This combination preserves large structures but removes small bumps
+        struct_size = 13
+        a_eroded = a_binary.filter(ImageFilter.MinFilter(struct_size))
+        a_opened = a_eroded.filter(ImageFilter.MaxFilter(struct_size))
         
         # 4. Soft Anti-Aliasing
         # Blur slightly at high res to create smooth transition
-        a_smooth = a_denoised.filter(ImageFilter.GaussianBlur(radius=2))
+        a_smooth = a_opened.filter(ImageFilter.GaussianBlur(radius=2))
         
         # Recombine high-res image
         high_res_clean = Image.merge('RGBA', (r, g, b, a_smooth))

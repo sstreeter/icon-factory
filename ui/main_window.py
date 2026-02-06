@@ -454,12 +454,33 @@ class MainWindow(QMainWindow):
         if self.processor.load_image(path):
             self.current_source_path = path
             file_name = Path(path).stem
-            self.drop_label.setText(f"Loaded: {file_name}")
+            
+            # Update Info Label
+            w, h = self.processor.source_image.size
+            self.source_info_label.setText(f"File: {file_name} | Size: {w}x{h}")
+            
+            # Show Source Image in Inspector
+            # Convert PIL to QPixmap
+            src_img = self.processor.source_image.copy()
+            if src_img.mode != 'RGBA':
+                src_img = src_img.convert('RGBA')
+                
+            data = src_img.tobytes('raw', 'RGBA')
+            qimage = QImage(data, w, h, QImage.Format.Format_RGBA8888)
+            pixmap = QPixmap.fromImage(qimage)
+            
+            # Scale to fit label (Keep Aspect Ratio)
+            # Max size 300x300 roughly based on layout
+            pixmap = pixmap.scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            
+            self.drop_label.setPixmap(pixmap)
+            self.drop_label.setText("") # Clear text
             
             # Set default icon name (user can edit)
             self.icon_name_input.setText(file_name)
             
             self.generate_btn.setEnabled(True)
+            self.check_btn.setEnabled(True) # Enable Icon Doctor
             self.apply_masking()
             self.update_preview()
     
