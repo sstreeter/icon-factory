@@ -301,18 +301,18 @@ class EdgeProcessor:
         # Execute after smoothing but before blur
         # stroke_weight: -10 to +10 (Negative=Thin/Erode, Positive=Bold/Dilate)
         if stroke_weight != 0:
-            weight = int(abs(stroke_weight))
-            # Ensure odd kernel size >= 3 logic if needed, but Min/Max filters work with any size in newer PIL, 
-            # though odd is safer. Let's stick to standard behavior.
-            # actually MaxFilter/MinFilter just need an integer size.
+            # Map abstract weight (1-10) to valid kernel size (odd >= 3)
+            # Weight 1 -> Size 3
+            # Weight 2 -> Size 5
+            # ...
+            kernel_size = (int(abs(stroke_weight)) * 2) + 1
             
-            if weight > 0:
-                if stroke_weight > 0:
-                    # Positive = Bold = Dilate (MaxFilter)
-                    a_opened = a_opened.filter(ImageFilter.MaxFilter(weight))
-                else:
-                    # Negative = Thin = Erode (MinFilter)
-                    a_opened = a_opened.filter(ImageFilter.MinFilter(weight))
+            if stroke_weight > 0:
+                # Positive = Bold = Dilate (MaxFilter)
+                a_opened = a_opened.filter(ImageFilter.MaxFilter(kernel_size))
+            else:
+                # Negative = Thin = Erode (MinFilter)
+                a_opened = a_opened.filter(ImageFilter.MinFilter(kernel_size))
 
         # 4. Soft Anti-Aliasing (Corner Sharpness)
         # Calculate blur radius based on sharpness (0-100 -> 4.0-0.0px)
