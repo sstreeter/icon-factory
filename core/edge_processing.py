@@ -294,4 +294,46 @@ class EdgeProcessor:
         # 6. Unpad (Crop back to original size)
         result = result_padded.crop((padding, padding, padding + original_size[0], padding + original_size[1]))
         
+        # 7. Border Guard (Wipe outer 1px to fix ringing artifacts)
+        result = EdgeProcessor.wipe_borders(result, pixels=1)
+        
         return result
+        
+    @staticmethod
+    def wipe_borders(image: Image.Image, pixels: int = 1) -> Image.Image:
+        """
+        Border Guard: Explicitly wipe the outer perimeter of the image to transparent.
+        Fixes 'ringing' artifacts and dirty lines caused by resampling at the edges.
+        
+        Args:
+            image: Source RGBA image
+            pixels: Number of pixels to wipe from the edge
+            
+        Returns:
+            Cleaned image with transparent border
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+            
+        w, h = image.size
+        
+        # Create a mask that is opaque in the center and transparent at edges
+        mask = Image.new('L', (w, h), 0)
+        
+        # Draw opaque rectangle in center
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(mask)
+        draw.rectangle((pixels, pixels, w - pixels - 1, h - pixels - 1), fill=255)
+        
+        # Apply mask to alpha channel
+        data = np.array(image)
+        alpha = data[:, :, 3]
+        mask_arr = np.array(mask)
+        
+        # Multiply alpha by mask (where mask is 0, alpha becomes 0)
+        # Using simple boolean masking since mask is binary
+        alpha[mask_arr == 0] = 0
+        
+        data[:, :, 3] = alpha
+        
+        return Image.fromarray(data, 'RGBA')

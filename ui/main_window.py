@@ -128,18 +128,18 @@ class MainWindow(QMainWindow):
         # Main layout
         layout = QVBoxLayout(central)
         
-        # Top section: Image loading and preview
-        top_layout = QHBoxLayout()
+        # Top section: Studio Layer (Dual Canvas)
+        studio_layout = QHBoxLayout()
         
-        # Left: Drop zone
-        drop_zone = self.create_drop_zone()
-        top_layout.addWidget(drop_zone, 1)
+        # Left: Source Inspector
+        self.source_group = self.create_source_inspector()
+        studio_layout.addWidget(self.source_group, 1)
         
-        # Right: Preview
-        preview_group = self.create_preview_panel()
-        top_layout.addWidget(preview_group, 1)
+        # Right: Artboard
+        self.artboard_group = self.create_artboard()
+        studio_layout.addWidget(self.artboard_group, 1)
         
-        layout.addLayout(top_layout)
+        layout.addLayout(studio_layout)
         
         # Masking options
         masking_group = self.create_masking_panel()
@@ -182,72 +182,108 @@ class MainWindow(QMainWindow):
         # Enable drag and drop
         self.setAcceptDrops(True)
     
-    def create_drop_zone(self):
-        """Create the image drop zone."""
-        group = QGroupBox("Source Image")
+    def create_source_inspector(self):
+        """Create the Source Inspector panel (Left Canvas)."""
+        group = QGroupBox("Source Inspector (Original)")
         layout = QVBoxLayout()
         
-        self.drop_label = QLabel("Drag & Drop Image Here\n\nor")
+        # Source viewing area (custom styled)
+        self.drop_label = QLabel("Drop Source Image Here")
         self.drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.drop_label.setMinimumHeight(200)
+        self.drop_label.setMinimumSize(300, 300)
         self.drop_label.setStyleSheet("""
             QLabel {
-                border: 2px dashed #aaa;
-                border-radius: 10px;
-                background-color: #f5f5f5;
-                font-size: 14px;
+                border: 2px dashed #999;
+                border-radius: 4px;
+                background-color: #f0f0f0;
                 color: #666;
+                font-weight: bold;
             }
         """)
-        layout.addWidget(self.drop_label)
+        layout.addWidget(self.drop_label, 1) # Stretch 1 to fill space
         
-        layout.addWidget(self.drop_label)
+        # Info readout
+        self.source_info_label = QLabel("No image loaded")
+        self.source_info_label.setStyleSheet("color: #666; font-size: 11px;")
+        layout.addWidget(self.source_info_label)
         
-        # Action buttons
-        btn_layout = QHBoxLayout()
-        
-        choose_btn = QPushButton("Choose File...")
+        # Action Bar
+        action_layout = QHBoxLayout()
+        choose_btn = QPushButton("📂 Open...")
         choose_btn.clicked.connect(self.choose_file)
-        btn_layout.addWidget(choose_btn)
+        action_layout.addWidget(choose_btn)
         
         self.check_btn = QPushButton("🩺 Check Icon")
-        self.check_btn.setToolTip("Analyze icon for design issues and quality problems")
-        self.check_btn.setEnabled(False) # Enabled when image loads
+        self.check_btn.setToolTip("Run Icon Doctor Audit")
+        self.check_btn.setEnabled(False)
         self.check_btn.clicked.connect(self.run_icon_audit)
-        btn_layout.addWidget(self.check_btn)
+        action_layout.addWidget(self.check_btn)
         
-        layout.addLayout(btn_layout)
+        layout.addLayout(action_layout)
         
         group.setLayout(layout)
         return group
     
-    def create_preview_panel(self):
-        """Create the preview panel."""
-        group = QGroupBox("Preview")
+    def create_artboard(self):
+        """Create the Artboard panel (Right Canvas)."""
+        group = QGroupBox("Artboard (Live Preview)")
         layout = QVBoxLayout()
         
+        # Artboard viewing area
+        # We use a scroll area to handle zooming/panning in future, 
+        # but for now it's a fixed viewport style
         self.preview_label = QLabel()
         self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_label.setMinimumSize(256, 256)
-        self.preview_label.setStyleSheet("border: 1px solid #ddd;")
-        layout.addWidget(self.preview_label)
+        self.preview_label.setMinimumSize(300, 300)
+        # Checkerboard background via stylesheet
+        self.preview_label.setStyleSheet("""
+            QLabel {
+                border: 1px solid #999;
+                background-color: #e0e0e0;
+                background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), 
+                                  linear-gradient(-45deg, #ccc 25%, transparent 25%), 
+                                  linear-gradient(45deg, transparent 75%, #ccc 75%), 
+                                  linear-gradient(-45deg, transparent 75%, #ccc 75%);
+                background-size: 20px 20px;
+                background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            }
+        """)
+        layout.addWidget(self.preview_label, 1) # Stretch 1
         
-        # Background selector
+        # Tool Bar
+        tools_layout = QHBoxLayout()
+        tools_layout.addWidget(QLabel("Overlays:"))
+        
+        self.show_mask_overlay = QCheckBox("Mask (Red)")
+        self.show_mask_overlay.setToolTip("Show removed areas in red")
+        self.show_mask_overlay.toggled.connect(self.update_preview)
+        tools_layout.addWidget(self.show_mask_overlay)
+        
+        self.show_safe_zone = QCheckBox("Safe Zone")
+        self.show_safe_zone.setToolTip("Show 10% Safe Zone Grid")
+        self.show_safe_zone.setChecked(True)
+        self.show_safe_zone.toggled.connect(self.update_preview)
+        tools_layout.addWidget(self.show_safe_zone)
+        
+        tools_layout.addStretch()
+        layout.addLayout(tools_layout)
+        
+        # Background selector (for export preview)
         bg_layout = QHBoxLayout()
-        bg_layout.addWidget(QLabel("Background:"))
+        bg_layout.addWidget(QLabel("Preview BG:"))
+        
+        self.bg_transparent = QRadioButton("🏁 Checker")
+        self.bg_transparent.setChecked(True)
+        self.bg_transparent.toggled.connect(self.update_preview)
+        bg_layout.addWidget(self.bg_transparent)
         
         self.bg_white = QRadioButton("⚪ White")
-        self.bg_white.setChecked(True)
         self.bg_white.toggled.connect(self.update_preview)
         bg_layout.addWidget(self.bg_white)
         
         self.bg_black = QRadioButton("⚫ Black")
         self.bg_black.toggled.connect(self.update_preview)
         bg_layout.addWidget(self.bg_black)
-        
-        self.bg_transparent = QRadioButton("◻️ Transparent")
-        self.bg_transparent.toggled.connect(self.update_preview)
-        bg_layout.addWidget(self.bg_transparent)
         
         bg_layout.addStretch()
         layout.addLayout(bg_layout)
@@ -486,17 +522,61 @@ class MainWindow(QMainWindow):
     
     def update_preview(self):
         """Update the preview image."""
-        preview = self.processor.get_preview(256)
-        if not preview:
+        if not self.processor.processed_image:
             return
+            
+        preview = self.processor.processed_image.copy()
         
-        # Apply background
+        # 1. Apply Backgrounds (for visualization only)
         if self.bg_white.isChecked():
-            bg = Image.new('RGBA', preview.size, (255, 255, 255, 255))
-            preview = Image.alpha_composite(bg, preview)
+            preview = MaskingEngine.add_background(preview, (255, 255, 255, 255))
         elif self.bg_black.isChecked():
-            bg = Image.new('RGBA', preview.size, (0, 0, 0, 255))
-            preview = Image.alpha_composite(bg, preview)
+            preview = MaskingEngine.add_background(preview, (0, 0, 0, 255))
+        # Transparent (Checkerboard) is handled by the stylesheet on the label
+            
+        # 2. Apply Overlays (Visual Aids)
+        
+        # Mask Overlay (Show removed areas in Red)
+        if self.show_mask_overlay.isChecked():
+            # Create a semi-transparent red layer
+            red_overlay = Image.new('RGBA', preview.size, (255, 0, 0, 100))
+            
+            # Create mask from current alpha (where alpha is 0/transp, we show red)
+            # We invert the alpha channel of the processed image
+            if preview.mode != 'RGBA':
+                preview = preview.convert('RGBA')
+            
+            alpha = preview.split()[3]
+            # Invert alpha: 0 (transp) -> 255 (opaque), 255 -> 0
+            from PIL import ImageChops
+            mask_inv = ImageChops.invert(alpha)
+            
+            # Composite red overlay using inverted alpha as mask
+            # We want red ONLY where it is transparent
+            preview.paste(red_overlay, (0,0), mask_inv)
+            
+        # Safe Zone Grid (10% Margin)
+        if self.show_safe_zone.isChecked():
+            from PIL import ImageDraw
+            draw = ImageDraw.Draw(preview)
+            w, h = preview.size
+            margin = int(min(w, h) * 0.10) # 10%
+            
+            # Draw Rectangle
+            # Outline color: Magenta (high visibility)
+            outline_color = (255, 0, 255, 255)
+            
+            # Draw rectangle (1px width)
+            draw.rectangle(
+                (margin, margin, w - margin, h - margin),
+                outline=outline_color,
+                width=2
+            )
+            
+            # Draw Center Crosshair (subtle)
+            cx, cy = w // 2, h // 2
+            draw.line((cx - 10, cy, cx + 10, cy), fill=outline_color, width=1)
+            draw.line((cx, cy - 10, cx, cy + 10), fill=outline_color, width=1)
         
         # Convert to QPixmap
         preview_rgb = preview.convert('RGB')
@@ -504,6 +584,11 @@ class MainWindow(QMainWindow):
         qimage = QImage(data, preview.width, preview.height, QImage.Format.Format_RGB888)
         pixmap = QPixmap.fromImage(qimage)
         
+        # Scale if necessary to fit (keep aspect ratio)
+        if pixmap.width() > 512:
+            pixmap = pixmap.scaled(512, 512, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            
+            
         self.preview_label.setPixmap(pixmap)
     
     def browse_output(self):
