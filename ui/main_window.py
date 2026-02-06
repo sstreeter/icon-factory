@@ -972,7 +972,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Auto-Fix Applied", "Smart Edge Cleanup has been applied!\n\nYour icon has been reconstructed with vector-like edges and Standard Safe Zone (10%).")
         
     def promote_preview_to_source(self):
-        """Phase 7: Promote current preview to be the new source (Bake/Commit)."""
+        """Phase 10: Promote current preview to be the new source (Save & Reload)."""
         if not self.processor.processed_image:
             return
             
@@ -980,27 +980,45 @@ class MainWindow(QMainWindow):
             self, 
             "Commit Changes?",
             "This will use your current preview as the new Original Source.\n\n"
-            "Effect sliders will be reset to 0 so you can apply *more* effects.\n"
-            "This cannot be undone (unless you Reload Original).\n\n"
+            "1. A new version of the file will be saved to 'history/'.\n"
+            "2. The app will reload this new file.\n"
+            "3. All sliders and masks will be reset.\n\n"
             "Proceed?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            # 1. Update Source in Processor
-            self.processor.source_image = self.processor.processed_image.copy()
+            # 1. Create History Directory
+            history_dir = Path("history")
+            history_dir.mkdir(exist_ok=True)
             
-            # 2. Reset UI Controls (Crucial to prevent double-application)
-            self.reset_ui_controls_after_commit()
+            # 2. Generate Unique Filename
+            # {original_stem}_v{timestamp}.png
+            original_stem = Path(self.current_source_path).stem
+            # Remove existing version suffix if present to avoid v1_v2_v3 chains
+            import re
+            base_stem = re.sub(r'_v\d{14}$', '', original_stem) 
             
-            # 3. Reset Processor State
-            self.processor.reset_to_source()
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            new_filename = f"{base_stem}_v{timestamp}.png"
+            new_path = history_dir / new_filename
             
-            # 4. Update UI
-            self.load_source_preview() # Update Source Inspector
-            self.update_preview()      # Update Artboard
+            # 3. Save Processed Image
+            try:
+                self.processor.processed_image.save(new_path)
+            except Exception as e:
+                QMessageBox.critical(self, "Error Saving", f"Could not save history file:\n{e}")
+                return
             
-            QMessageBox.information(self, "Changes Committed", "Your preview is now the Source. You can now layer more effects on top of it.")
+            # 4. Reload as New Source (True Reset)
+            # This triggers load_image -> resets masking, geometry, stroke -> updates UI
+            self.load_image(str(new_path.absolute()))
+            
+            # 5. Toast
+            QMessageBox.information(self, "Changes Committed", 
+                                  f"Saved version: {new_filename}\n\n"
+                                  "The pipeline has been reset. You are now working on the clean, committed version.")
 
     def reset_ui_controls_after_commit(self):
         """Reset all processing controls to neutral state."""
