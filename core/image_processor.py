@@ -14,7 +14,8 @@ class ImageProcessor:
     # Standard icon sizes for different platforms
     WINDOWS_SIZES = [16, 32, 48, 256]
     MAC_SIZES = [16, 32, 64, 128, 256, 512, 1024]
-    ALL_SIZES = sorted(list(set(WINDOWS_SIZES + MAC_SIZES)))
+    WEB_SIZES = [100]  # Common for forms and web applications
+    ALL_SIZES = sorted(list(set(WINDOWS_SIZES + MAC_SIZES + WEB_SIZES)))
     
     def __init__(self):
         self.source_image: Optional[Image.Image] = None
