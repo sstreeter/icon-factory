@@ -427,10 +427,19 @@ class MainWindow(QMainWindow):
         elif self.mask_color.isChecked():
             tolerance = self.tolerance_spin.value()
             img = MaskingEngine.color_mask(img, self.current_mask_color, tolerance)
+            
+            # Auto-crop after if enabled
+            if self.autocrop_after.isChecked():
+                img = AutoCropper.crop_to_content(img, padding=5)
+        
         elif self.mask_border.isChecked():
             # Border-only masking (Magic Wand style)
             tolerance = self.tolerance_spin.value()
             img = BorderMasking.flood_fill_from_edges(img, tolerance=tolerance, start_from_corners=True)
+            
+            # Auto-crop after if enabled
+            if self.autocrop_after.isChecked():
+                img = AutoCropper.crop_to_content(img, padding=5)
         
         # Apply advanced edge processing (only if group is checked)
         if hasattr(self, 'edge_group') and self.edge_group.isChecked():
