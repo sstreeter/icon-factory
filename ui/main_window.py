@@ -237,6 +237,13 @@ class MainWindow(QMainWindow):
         self.check_btn.clicked.connect(self.run_icon_audit)
         action_layout.addWidget(self.check_btn)
         
+        # Commit Button (Phase 7)
+        self.commit_btn = QPushButton("⬆ Commit Changes")
+        self.commit_btn.setToolTip("Use current Preview as the Source Image (Bake Effects)")
+        self.commit_btn.clicked.connect(self.promote_preview_to_source)
+        # self.commit_btn.setEnabled(False) # Logic could enable this only when changes made
+        action_layout.addWidget(self.commit_btn)
+        
         layout.addLayout(action_layout)
         
         group.setLayout(layout)
@@ -820,6 +827,61 @@ class MainWindow(QMainWindow):
         self.processor.apply_processed_image(img)
         self.update_preview()
         QMessageBox.information(self, "Auto-Fix Applied", "Smart Edge Cleanup has been applied!\n\nYour icon has been reconstructed with vector-like edges and Standard Safe Zone (10%).")
+        
+    def promote_preview_to_source(self):
+        """Phase 7: Promote current preview to be the new source (Bake/Commit)."""
+        if not self.processor.processed_image:
+            return
+            
+        reply = QMessageBox.question(
+            self, 
+            "Commit Changes?",
+            "This will use your current preview as the new Original Source.\n\n"
+            "Effect sliders will be reset to 0 so you can apply *more* effects.\n"
+            "This cannot be undone (unless you Reload Original).\n\n"
+            "Proceed?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # 1. Update Source in Processor
+            self.processor.source_image = self.processor.processed_image.copy()
+            
+            # 2. Reset UI Controls (Crucial to prevent double-application)
+            self.reset_ui_controls_after_commit()
+            
+            # 3. Reset Processor State
+            self.processor.reset_to_source()
+            
+            # 4. Update UI
+            self.load_source_preview() # Update Source Inspector
+            self.update_preview()      # Update Artboard
+            
+            QMessageBox.information(self, "Changes Committed", "Your preview is now the Source. You can now layer more effects on top of it.")
+
+    def reset_ui_controls_after_commit(self):
+        """Reset all processing controls to neutral state."""
+        # 1. Geometry (The Enforcer) - Reset to Neutral
+        # We set smoothing to 0 because the image is ALREADY smoothed.
+        self.smooth_slider.blockSignals(True)
+        self.smooth_slider.setValue(0) # 0 = Faithful to the new source
+        self.smooth_slider.blockSignals(False)
+        self.smooth_label.setText("Smoothing (Wart Removal): 0")
+        
+        # Sharpness stays at 50 (Neutral/Standard)
+        self.sharp_slider.blockSignals(True)
+        self.sharp_slider.setValue(50) 
+        self.sharp_slider.blockSignals(False)
+        self.sharp_label.setText("Corner Sharpness: 50")
+        
+        # 2. Cleanup Tab - Reset
+        self.mask_none.setChecked(True) # Disable masking
+        self.defringe_check.setChecked(False)
+        self.edge_group_check.setChecked(False)
+        self.edge_controls.setEnabled(False)
+        
+        # 3. Geometry Tab - Reset (Simulated)
+        # We already reset sliders above
 
     def generate_icons(self):
         """Start icon generation."""
