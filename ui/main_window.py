@@ -543,19 +543,22 @@ class MainWindow(QMainWindow):
         # Re-apply masking if needed
         # (This is simplified - in a fuller implementation we'd persist masking state better)
         if self.mask_autocrop.isChecked():
-            img = AutoCropper.crop_to_content(img, padding=5)
+            # Use Safe Zone logic instead of tight crop
+            img = AutoCropper.apply_safe_zone(img, margin_percent=10)
         elif self.mask_color.isChecked():
             tolerance = self.tolerance_spin.value()
             img = MaskingEngine.color_mask(img, self.current_mask_color, tolerance)
             if self.autocrop_after.isChecked():
-                 img = AutoCropper.crop_to_content(img, padding=5)
-                 
+                 # Use Safe Zone logic instead of tight crop
+                 img = AutoCropper.apply_safe_zone(img, margin_percent=10)
+        
         # Apply Smart Cleanup
+        # Note: smart_cleanup now handles internal padding to fix border artifacts
         img = EdgeProcessor.smart_cleanup(img)
         
         self.processor.apply_processed_image(img)
         self.update_preview()
-        QMessageBox.information(self, "Auto-Fix Applied", "Smart Edge Cleanup has been applied!\n\nYour icon has been reconstructed with vector-like edges.")
+        QMessageBox.information(self, "Auto-Fix Applied", "Smart Edge Cleanup has been applied!\n\nYour icon has been reconstructed with vector-like edges and Standard Safe Zone (10%).")
 
     def generate_icons(self):
         """Start icon generation."""

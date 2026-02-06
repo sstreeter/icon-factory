@@ -106,3 +106,55 @@ class AutoCropper:
             "bounds": bounds,
             "waste_percent": waste_percent
         }
+        
+    @staticmethod
+    def apply_safe_zone(image: Image.Image, margin_percent: float = 10.0) -> Image.Image:
+        """
+        Enforce a 'Safe Zone' by scaling content to fit within a margin.
+        Ensures uniform borders and prevents clipping using industry standards.
+        (e.g., Apple uses ~10-15% margin, Google ~8%)
+        
+        Args:
+            image: Source image (likely tightly cropped)
+            margin_percent: Percentage of canvas to use as margin (per side)
+            
+        Returns:
+            Square image with content centered and padded respecting the safe zone
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+            
+        # 1. Get tight content bounds first (ignore existing whitespace)
+        bounds = AutoCropper.get_content_bounds(image, padding=0)
+        if not bounds:
+            return image
+            
+        content = image.crop(bounds)
+        content_w, content_h = content.size
+        
+        # 2. Determine container size (Square)
+        # We want the content to fit within (100% - 2*margin) of the container
+        # Let's use the larger dimension of content as baseline
+        max_dim = max(content_w, content_h)
+        
+        # Calculate canvas size
+        # effective_width = canvas_size * (1 - 2*margin/100)
+        # canvas_size = effective_width / (1 - 2*margin/100)
+        # canvas_size = max_dim / (1 - 2*margin/100)
+        
+        safe_factor = 1.0 - (2.0 * margin_percent / 100.0)
+        canvas_size = int(max_dim / safe_factor)
+        
+        # Enforce minimum size (optional, but good for anti-aliasing)
+        canvas_size = max(canvas_size, 512) 
+        
+        # Create new square canvas
+        canvas = Image.new('RGBA', (canvas_size, canvas_size), (0, 0, 0, 0))
+        
+        # 3. Center content
+        paste_x = (canvas_size - content_w) // 2
+        paste_y = (canvas_size - content_h) // 2
+        
+        canvas.paste(content, (paste_x, paste_y), content)
+        
+        return canvas

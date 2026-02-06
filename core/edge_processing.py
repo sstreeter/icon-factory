@@ -233,11 +233,13 @@ class EdgeProcessor:
         Synthesizes vector-like quality from pixelated/jagged sources.
         
         Algorithm:
-        1. Upscale 400% (High-quality Lanczos)
-        2. Hard Threshold (Convert alpha to binary mask) to define sharp shape
-        3. Median Filter (Remove 'dirty pixels' / stray artifacts)
-        4. Soft Blur (Create perfect anti-aliased edge at high res)
-        5. Downscale (High-quality Lanczos)
+        1. Pad image (prevent edge clipping during processing)
+        2. Upscale 400% (High-quality Lanczos)
+        3. Hard Threshold (Convert alpha to binary mask) to define sharp shape
+        4. Median Filter (Remove 'dirty pixels' / stray artifacts)
+        5. Soft Blur (Create perfect anti-aliased edge at high res)
+        6. Downscale (High-quality Lanczos)
+        7. Unpad
         
         Args:
             image: Source RGBA image
@@ -250,10 +252,19 @@ class EdgeProcessor:
             
         original_size = image.size
         
+        # 0. Pad image to prevent border artifacts
+        # Add 10px padding on all sides to give the kernels room to work
+        padding = 10
+        padded_w = original_size[0] + (padding * 2)
+        padded_h = original_size[1] + (padding * 2)
+        padded_img = Image.new('RGBA', (padded_w, padded_h), (0,0,0,0))
+        padded_img.paste(image, (padding, padding))
+        
         # 1. Pipeline: High-Res Processing
         # Upscale 4x for sub-pixel precision
-        high_res = image.resize(
-            (original_size[0] * 4, original_size[1] * 4), 
+        scale = 4
+        high_res = padded_img.resize(
+            (padded_w * scale, padded_h * scale), 
             resample=Image.Resampling.LANCZOS
         )
         
@@ -277,7 +288,10 @@ class EdgeProcessor:
         # Recombine high-res image
         high_res_clean = Image.merge('RGBA', (r, g, b, a_smooth))
         
-        # 5. Downscale to original
-        result = high_res_clean.resize(original_size, resample=Image.Resampling.LANCZOS)
+        # 5. Downscale to original padded size
+        result_padded = high_res_clean.resize((padded_w, padded_h), resample=Image.Resampling.LANCZOS)
+        
+        # 6. Unpad (Crop back to original size)
+        result = result_padded.crop((padding, padding, padding + original_size[0], padding + original_size[1]))
         
         return result
