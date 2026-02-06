@@ -248,20 +248,20 @@ class MainWindow(QMainWindow):
         # Radio buttons for masking mode
         mode_layout = QHBoxLayout()
         
-        self.mask_none = QRadioButton("None")
+        self.mask_none = QRadioButton("None (Keep Original)")
         self.mask_none.setChecked(True)
         self.mask_none.toggled.connect(self.apply_masking)
         mode_layout.addWidget(self.mask_none)
         
-        self.mask_autocrop = QRadioButton("Auto-Crop")
+        self.mask_autocrop = QRadioButton("Auto-Crop (Detect Content)")
         self.mask_autocrop.toggled.connect(self.apply_masking)
         mode_layout.addWidget(self.mask_autocrop)
         
-        self.mask_color = QRadioButton("Color Mask (Entire Image)")
+        self.mask_color = QRadioButton("Remove Color (Entire Image)")
         self.mask_color.toggled.connect(self.apply_masking)
         mode_layout.addWidget(self.mask_color)
         
-        self.mask_border = QRadioButton("Border Only (Magic Wand)")
+        self.mask_border = QRadioButton("Remove Color (Borders Only)")
         self.mask_border.toggled.connect(self.apply_masking)
         mode_layout.addWidget(self.mask_border)
         
@@ -287,6 +287,12 @@ class MainWindow(QMainWindow):
         
         color_layout.addStretch()
         layout.addLayout(color_layout)
+        
+        # Auto-crop after masking checkbox
+        self.autocrop_after = QCheckBox("✂️ Auto-Crop After Masking (Crop to tight bounds after removing transparency)")
+        self.autocrop_after.setChecked(True)  # Default ON for clean results
+        self.autocrop_after.toggled.connect(self.apply_masking)
+        layout.addWidget(self.autocrop_after)
         
         # Advanced edge processing
         edge_group = QGroupBox("✨ Advanced Edge Processing (Optional)")
