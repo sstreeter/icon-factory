@@ -227,22 +227,17 @@ class EdgeProcessor:
         return result
 
     @staticmethod
-    def smart_cleanup(image: Image.Image) -> Image.Image:
+    def smart_cleanup(image: Image.Image, 
+                     smoothing_strength: int = 50, 
+                     corner_sharpness: int = 50) -> Image.Image:
         """
         Reconstruct jagged edges using Super-Sampling technique.
         Synthesizes vector-like quality from pixelated/jagged sources.
         
-        Algorithm:
-        1. Pad image (prevent edge clipping during processing)
-        2. Upscale 400% (High-quality Lanczos)
-        3. Hard Threshold (Convert alpha to binary mask) to define sharp shape
-        4. Median Filter (Remove 'dirty pixels' / stray artifacts)
-        5. Soft Blur (Create perfect anti-aliased edge at high res)
-        6. Downscale (High-quality Lanczos)
-        7. Unpad
-        
         Args:
             image: Source RGBA image
+            smoothing_strength: 0-100 (0=Faithful, 100=Geometric/Abstract)
+            corner_sharpness: 0-100 (0=Round, 100=Sharp)
             
         Returns:
             Reconstructed 'clean' image
@@ -278,17 +273,27 @@ class EdgeProcessor:
         a_binary = Image.fromarray(a_arr, 'L')
         
         # 3. Morphological Opening (Wart Removal / Smoothing)
-        # We use a large kernel because we are at 4x scale.
-        # Erode (MinFilter): Eats away small protrusions ("warts")
-        # Dilate (MaxFilter): Grows back the main shape
-        # This combination preserves large structures but removes small bumps
-        struct_size = 13
-        a_eroded = a_binary.filter(ImageFilter.MinFilter(struct_size))
-        a_opened = a_eroded.filter(ImageFilter.MaxFilter(struct_size))
+        # Calculate kernel size based on strength (0-100 -> 0-25px)
+        # Strength 50 -> ~12px (Current default)
+        struct_size = int(smoothing_strength * 0.25)
         
-        # 4. Soft Anti-Aliasing
+        if struct_size > 0:
+            # Erode (MinFilter): Eats away small protrusions ("warts")
+            # Dilate (MaxFilter): Grows back the main shape
+            a_eroded = a_binary.filter(ImageFilter.MinFilter(struct_size))
+            a_opened = a_eroded.filter(ImageFilter.MaxFilter(struct_size))
+        else:
+            a_opened = a_binary
+        
+        # 4. Soft Anti-Aliasing (Corner Sharpness)
+        # Calculate blur radius based on sharpness (0-100 -> 4.0-0.0px)
+        # Sharpness 50 -> 2.0px (Current default)
+        blur_radius = 4.0 * (1.0 - (corner_sharpness / 100.0))
+        # Ensure minimum tiny blur to prevent aliasing
+        blur_radius = max(blur_radius, 0.5)
+        
         # Blur slightly at high res to create smooth transition
-        a_smooth = a_opened.filter(ImageFilter.GaussianBlur(radius=2))
+        a_smooth = a_opened.filter(ImageFilter.GaussianBlur(radius=blur_radius))
         
         # Recombine high-res image
         high_res_clean = Image.merge('RGBA', (r, g, b, a_smooth))

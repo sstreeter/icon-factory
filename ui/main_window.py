@@ -145,6 +145,10 @@ class MainWindow(QMainWindow):
         masking_group = self.create_masking_panel()
         layout.addWidget(masking_group)
         
+        # Geometry Settings (Phase 4)
+        geometry_group = self.create_geometry_panel()
+        layout.addWidget(geometry_group)
+        
         # Export options
         export_group = self.create_export_panel()
         layout.addWidget(export_group)
@@ -425,6 +429,40 @@ class MainWindow(QMainWindow):
         layout.addStretch()
         group.setLayout(layout)
         return group
+        
+    def create_geometry_panel(self):
+        """Create Geometry Settings panel (Phase 4)."""
+        group = QGroupBox("Geometry Settings (Enforce Clean Lines)")
+        layout = QHBoxLayout()
+        
+        # 1. Smoothing (Wart Removal)
+        smooth_layout = QVBoxLayout()
+        smooth_label = QLabel("Smoothing (Wart Removal): 50")
+        self.smooth_slider = QSlider(Qt.Orientation.Horizontal)
+        self.smooth_slider.setRange(0, 100)
+        self.smooth_slider.setValue(50)
+        self.smooth_slider.setToolTip("Aggressiveness of bump removal. Higher = Straighter lines.")
+        self.smooth_slider.valueChanged.connect(lambda v: smooth_label.setText(f"Smoothing (Wart Removal): {v}"))
+        
+        smooth_layout.addWidget(smooth_label)
+        smooth_layout.addWidget(self.smooth_slider)
+        layout.addLayout(smooth_layout)
+        
+        # 2. Corner Sharpness
+        sharp_layout = QVBoxLayout()
+        sharp_label = QLabel("Corner Sharpness: 50")
+        self.sharp_slider = QSlider(Qt.Orientation.Horizontal)
+        self.sharp_slider.setRange(0, 100)
+        self.sharp_slider.setValue(50)
+        self.sharp_slider.setToolTip("0 = Round, 100 = Razor Sharp")
+        self.sharp_slider.valueChanged.connect(lambda v: sharp_label.setText(f"Corner Sharpness: {v}"))
+        
+        sharp_layout.addWidget(sharp_label)
+        sharp_layout.addWidget(self.sharp_slider)
+        layout.addLayout(sharp_layout)
+        
+        group.setLayout(layout)
+        return group
     
     def dragEnterEvent(self, event: QDragEnterEvent):
         """Handle drag enter event."""
@@ -658,9 +696,12 @@ class MainWindow(QMainWindow):
                  # Use Safe Zone logic instead of tight crop
                  img = AutoCropper.apply_safe_zone(img, margin_percent=10)
         
-        # Apply Smart Cleanup
+        # Apply Smart Cleanup with Geometry Settings
         # Note: smart_cleanup now handles internal padding to fix border artifacts
-        img = EdgeProcessor.smart_cleanup(img)
+        smoothing = self.smooth_slider.value()
+        sharpness = self.sharp_slider.value()
+        
+        img = EdgeProcessor.smart_cleanup(img, smoothing_strength=smoothing, corner_sharpness=sharpness)
         
         self.processor.apply_processed_image(img)
         self.update_preview()
