@@ -15,6 +15,8 @@ from pathlib import Path
 import sys
 
 from core import ImageProcessor, AutoCropper, MaskingEngine, IconExporter, EdgeProcessor, BorderMasking
+from core.icon_audit import IconAuditor
+from ui.audit_dialog import AuditReportDialog
 from utils import ArchiveManager
 
 
@@ -116,7 +118,7 @@ class MainWindow(QMainWindow):
     
     def init_ui(self):
         """Initialize the user interface."""
-        self.setWindowTitle("Icon Factory")
+        self.setWindowTitle("Icon Architect - Professional Edition")
         self.setMinimumSize(900, 700)
         
         # Central widget
@@ -199,9 +201,22 @@ class MainWindow(QMainWindow):
         """)
         layout.addWidget(self.drop_label)
         
+        layout.addWidget(self.drop_label)
+        
+        # Action buttons
+        btn_layout = QHBoxLayout()
+        
         choose_btn = QPushButton("Choose File...")
         choose_btn.clicked.connect(self.choose_file)
-        layout.addWidget(choose_btn)
+        btn_layout.addWidget(choose_btn)
+        
+        self.check_btn = QPushButton("🩺 Check Icon")
+        self.check_btn.setToolTip("Analyze icon for design issues and quality problems")
+        self.check_btn.setEnabled(False) # Enabled when image loads
+        self.check_btn.clicked.connect(self.run_icon_audit)
+        btn_layout.addWidget(self.check_btn)
+        
+        layout.addLayout(btn_layout)
         
         group.setLayout(layout)
         return group
@@ -501,6 +516,47 @@ class MainWindow(QMainWindow):
         if dir_path:
             self.output_path.setText(dir_path)
     
+    
+    def run_icon_audit(self):
+        """Run the Icon Doctor audit."""
+        if not self.processor.processed_image:
+            return
+            
+        # Run audit
+        issues = IconAuditor.audit_image(self.processor.processed_image)
+        
+        # Show report
+        dialog = AuditReportDialog(issues, self)
+        if dialog.exec():
+            # If user clicked "Auto-Fix All"
+            # Apply Smart Edge Cleanup
+            self.apply_smart_cleanup()
+            
+    def apply_smart_cleanup(self):
+        """Apply Smart Edge Cleanup (Vector Reconstruction)."""
+        if not self.processor.source_image:
+            return
+            
+        self.processor.reset_to_source()
+        img = self.processor.processed_image
+        
+        # Re-apply masking if needed
+        # (This is simplified - in a fuller implementation we'd persist masking state better)
+        if self.mask_autocrop.isChecked():
+            img = AutoCropper.crop_to_content(img, padding=5)
+        elif self.mask_color.isChecked():
+            tolerance = self.tolerance_spin.value()
+            img = MaskingEngine.color_mask(img, self.current_mask_color, tolerance)
+            if self.autocrop_after.isChecked():
+                 img = AutoCropper.crop_to_content(img, padding=5)
+                 
+        # Apply Smart Cleanup
+        img = EdgeProcessor.smart_cleanup(img)
+        
+        self.processor.apply_processed_image(img)
+        self.update_preview()
+        QMessageBox.information(self, "Auto-Fix Applied", "Smart Edge Cleanup has been applied!\n\nYour icon has been reconstructed with vector-like edges.")
+
     def generate_icons(self):
         """Start icon generation."""
         if not self.processor.processed_image:

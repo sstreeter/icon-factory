@@ -225,3 +225,59 @@ class EdgeProcessor:
         result.putalpha(alpha)
         
         return result
+
+    @staticmethod
+    def smart_cleanup(image: Image.Image) -> Image.Image:
+        """
+        Reconstruct jagged edges using Super-Sampling technique.
+        Synthesizes vector-like quality from pixelated/jagged sources.
+        
+        Algorithm:
+        1. Upscale 400% (High-quality Lanczos)
+        2. Hard Threshold (Convert alpha to binary mask) to define sharp shape
+        3. Median Filter (Remove 'dirty pixels' / stray artifacts)
+        4. Soft Blur (Create perfect anti-aliased edge at high res)
+        5. Downscale (High-quality Lanczos)
+        
+        Args:
+            image: Source RGBA image
+            
+        Returns:
+            Reconstructed 'clean' image
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+            
+        original_size = image.size
+        
+        # 1. Pipeline: High-Res Processing
+        # Upscale 4x for sub-pixel precision
+        high_res = image.resize(
+            (original_size[0] * 4, original_size[1] * 4), 
+            resample=Image.Resampling.LANCZOS
+        )
+        
+        # Split channels
+        r, g, b, a = high_res.split()
+        
+        # 2. Hard Threshold on Alpha (Create Vector Shape)
+        # Anything > 128 becomes opaque, else transparent. Snap to grid.
+        a_arr = np.array(a)
+        a_arr = np.where(a_arr > 127, 255, 0).astype(np.uint8)
+        a_binary = Image.fromarray(a_arr, 'L')
+        
+        # 3. Denoise (Remove Dirty Pixels)
+        # Median filter removes salt-and-pepper noise (stray pixels)
+        a_denoised = a_binary.filter(ImageFilter.MedianFilter(size=5))
+        
+        # 4. Soft Anti-Aliasing
+        # Blur slightly at high res to create smooth transition
+        a_smooth = a_denoised.filter(ImageFilter.GaussianBlur(radius=2))
+        
+        # Recombine high-res image
+        high_res_clean = Image.merge('RGBA', (r, g, b, a_smooth))
+        
+        # 5. Downscale to original
+        result = high_res_clean.resize(original_size, resample=Image.Resampling.LANCZOS)
+        
+        return result

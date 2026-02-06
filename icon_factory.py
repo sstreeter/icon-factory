@@ -14,8 +14,8 @@ def main():
     from ui import MainWindow
     
     app = QApplication(sys.argv)
-    app.setApplicationName("Icon Factory")
-    app.setOrganizationName("Icon Factory")
+    app.setApplicationName("Icon Architect")
+    app.setOrganizationName("Icon Architect")
     
     # Set application style
     app.setStyle("Fusion")

@@ -1,6 +1,27 @@
-# Icon Factory - Changelog
+# Icon Architect - Changelog
 
 All notable changes to this project will be documented in this file.
+
+## [2.0.0] - REBRAND - 2026-02-06
+**The Iconfactory Rebrand**: Application renamed to **Icon Architect** to respect trademarks.
+
+### Added
+- **Icon Doctor (Audit Module)**:
+  - New "Check Icon" button in main interface
+  - Analyzes resolution, aspect ratio, edge quality, and cleanliness
+  - Provides a "Report Card" with traffic-light status (Pass/Warn/Fail)
+  - One-click "Auto-Fix All" button for detected issues
+
+- **Smart Edge Reconstruction (Vector Power)**:
+  - New `smart_cleanup` algorithm using 4x Super-Sampling
+  - Synthesizes sharp, vector-like edges from jagged pixel inputs
+  - Hard thresholding + Median Denoising + Soft AA Blur
+  - Replaces simple blur for "Auto-Fix" operations
+
+### Changed
+- **Renamed Application** from "Icon Factory" to "Icon Architect"
+- Window title updated to "Icon Architect - Professional Edition"
+- Updated all documentation to reflect new identity
 
 ## [1.0.5] - 2026-02-06
 
