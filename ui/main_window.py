@@ -14,7 +14,7 @@ from PIL import Image, ImageChops
 from pathlib import Path
 import sys
 
-from core import ImageProcessor, AutoCropper, MaskingEngine, IconExporter, EdgeProcessor, BorderMasking
+from core import ImageProcessor, AutoCropper, MaskingEngine, IconExporter, EdgeProcessor, BorderMasking, CompositionEngine
 from core.icon_audit import IconAuditor
 from ui.audit_dialog import AuditReportDialog
 from ui.widgets import TransparencyLabel
@@ -164,14 +164,21 @@ class MainWindow(QMainWindow):
         self.geometry_tab.setLayout(geo_tab_layout)
         self.tabs.addTab(self.geometry_tab, "2. Geometry (Enforcer)")
         
-        # Tab 3: Stroke & Polish (Phase 8)
+        # Tab 3: Composition & Effects (Phase 16 & 8)
         self.stroke_tab = QWidget()
         stroke_tab_layout = QVBoxLayout()
+        
+        # 3.1 Smart Composition (Fit & Padding)
+        composition_group = self.create_composition_panel()
+        stroke_tab_layout.addWidget(composition_group)
+        
+        # 3.2 Stroke Engine
         stroke_group = self.create_stroke_panel()
         stroke_tab_layout.addWidget(stroke_group)
+        
         stroke_tab_layout.addStretch()
         self.stroke_tab.setLayout(stroke_tab_layout)
-        self.tabs.addTab(self.stroke_tab, "3. Stroke & Polish")
+        self.tabs.addTab(self.stroke_tab, "3. Composition & Effects")
         
         # Tab 4: Export (Moved)
         self.export_tab = QWidget()
@@ -555,6 +562,50 @@ class MainWindow(QMainWindow):
         """)
         btn.clicked.connect(lambda: QMessageBox.information(self, title, text))
         return btn
+
+    def create_composition_panel(self):
+        """Create Composition Settings panel (Phase 16)."""
+        group = QGroupBox("Smart Composition (Fit & Padding)")
+        layout = QVBoxLayout()
+        
+        # 1. Fit Mode (Contain vs Cover)
+        mode_layout = QHBoxLayout()
+        mode_label = QLabel("Fit Mode:")
+        self.fit_contain = QRadioButton("Fit (Whole Image)")
+        self.fit_contain.setChecked(True)
+        self.fit_contain.setToolTip("Scale image to fit INSIDE the square (adds padding if needed).")
+        
+        self.fit_cover = QRadioButton("Fill (Crop)")
+        self.fit_cover.setToolTip("Scale image to FILL the square (crops excess).")
+        
+        mode_layout.addWidget(mode_label)
+        mode_layout.addWidget(self.fit_contain)
+        mode_layout.addWidget(self.fit_cover)
+        mode_layout.addStretch()
+        layout.addLayout(mode_layout)
+        
+        # 2. Scale / Padding Slider
+        scale_layout = QHBoxLayout()
+        self.scale_label = QLabel("Zoom / Scale: 100%")
+        
+        self.scale_slider = QSlider(Qt.Orientation.Horizontal)
+        self.scale_slider.setRange(50, 150) # 50% to 150%
+        self.scale_slider.setValue(100)
+        self.scale_slider.setToolTip("Zoom out (<100%) to add border padding.\nZoom in (>100%) to crop.")
+        
+        self.scale_slider.valueChanged.connect(lambda v: self.scale_label.setText(f"Zoom / Scale: {v}%"))
+        self.scale_slider.sliderReleased.connect(self.apply_masking) # Update on release to avoid lag
+        
+        scale_layout.addWidget(self.scale_label)
+        scale_layout.addWidget(self.scale_slider)
+        layout.addLayout(scale_layout)
+        
+        # Connect mode toggles
+        self.fit_contain.toggled.connect(self.apply_masking)
+        self.fit_cover.toggled.connect(self.apply_masking)
+        
+        group.setLayout(layout)
+        return group
         
     def create_geometry_panel(self):
         """Create Geometry Settings panel (Phase 4)."""
@@ -807,6 +858,11 @@ class MainWindow(QMainWindow):
             # Auto-crop after if enabled
             if self.autocrop_after.isChecked():
                 img = AutoCropper.crop_to_content(img, padding=5)
+        
+        # Phase 16: Smart Composition (Fit & Padding)
+        # We now have the "Core Content" (Masked & Cropped).
+        # We must compose it onto the standard square canvas.
+        img = self.apply_composition_step(img)
         
         # Mask Choke / Expand (Phase 9) - Apply BEFORE cleaning
         # This removes fringes so the cleaner doesn't get confused
@@ -1294,22 +1350,6 @@ class MainWindow(QMainWindow):
             item_name = v['name']
             item_path = v['path']
             
-            # Check if this is the active file
-            if item_path == str(Path(current_path).absolute()):
-                 item_name += " (Active)"
-                 current_idx = i
-                 
-            self.history_combo.addItem(item_name, item_path)
-            
-        # If the list is empty (first time load), or current path isn't in history logic 
-        # (maybe it's the original file in root), we should append it or handle it.
-        # Ideally, we want the timeline to include everything.
-        
-        # Check if current_path is effectively "Original" (no version in name)
-        # If it's not in the versions list, it might be the root file.
-        # Let's verify if current selection was found.
-        found_active = False
-        for i in range(self.history_combo.count()):
             if self.history_combo.itemData(i) == str(Path(current_path).absolute()):
                 self.history_combo.setCurrentIndex(i)
                 found_active = True
@@ -1317,8 +1357,6 @@ class MainWindow(QMainWindow):
                 
         if not found_active:
              # Current file is likely the Original Source (root folder)
-             # Add it at the end? Or beginning?
-             # Let's add it as "Original Source"
              self.history_combo.addItem(f"Original Source (Active)", str(Path(current_path).absolute()))
              self.history_combo.setCurrentIndex(self.history_combo.count() - 1)
                  
@@ -1332,6 +1370,20 @@ class MainWindow(QMainWindow):
         if path and Path(path).exists():
             # Load it (this triggers standard load pipeline)
             self.load_image(path)
+
+    def apply_composition_step(self, image: Image.Image) -> Image.Image:
+        """Apply Composition (Scale/Fit) to the image."""
+        if not image:
+            return None
             
-            # Note: load_image will call populate_history_combo again via the integration step we are about to do.
-            # So we don't need to manually update selection here.
+        # 1. Get Settings
+        scale_pct = self.scale_slider.value() # 50-150
+        scale = scale_pct / 100.0
+        
+        fit_mode = 'contain' if self.fit_contain.isChecked() else 'cover'
+        
+        # 2. Compose
+        # Default target size 1024 for internal processing
+        # (Export will resize to specific targets later)
+        return CompositionEngine.compose(image, target_size=1024, scale=scale, fit_mode=fit_mode)
+

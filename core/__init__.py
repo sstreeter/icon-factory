@@ -8,5 +8,6 @@ from .masking import MaskingEngine
 from .export import IconExporter
 from .edge_processing import EdgeProcessor
 from .border_masking import BorderMasking
+from .composition import CompositionEngine
 
-__all__ = ['ImageProcessor', 'AutoCropper', 'MaskingEngine', 'IconExporter', 'EdgeProcessor', 'BorderMasking']
+__all__ = ['ImageProcessor', 'AutoCropper', 'MaskingEngine', 'IconExporter', 'EdgeProcessor', 'BorderMasking', 'CompositionEngine']
