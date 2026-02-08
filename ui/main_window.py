@@ -1344,6 +1344,7 @@ class MainWindow(QMainWindow):
         # 3. Add Items to Combo (Unified List)
         # Scan list to find which one is "Current"
         current_idx = 0 
+        found_active = False # Initialize explicitly 
         
         # Add matches
         for i, v in enumerate(versions):
