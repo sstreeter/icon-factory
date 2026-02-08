@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QGroupBox, QRadioButton, QCheckBox,
     QSlider, QLineEdit, QProgressBar, QMessageBox, QColorDialog,
-    QSpinBox, QTabWidget, QComboBox
+    QSpinBox, QTabWidget, QComboBox, QScrollArea
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage, QDragEnterEvent, QDropEvent
@@ -271,17 +271,48 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Artboard (Live Preview)")
         layout = QVBoxLayout()
         
-        # Artboard viewing area
-        # We use a scroll area to handle zooming/panning in future, 
-        # but for now it's a fixed viewport style
-        # Artboard viewing area
-        # We use a scroll area to handle zooming/panning in future, 
-        # but for now it's a fixed viewport style
+        # Artboard viewing area (Zoomable Viewport)
+        self.preview_scroll = QScrollArea()
+        self.preview_scroll.setWidgetResizable(True) # Fit by default
+        self.preview_scroll.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview_scroll.setStyleSheet("QScrollArea { background-color: #2b2b2b; border: none; }")
+        
         self.preview_label = TransparencyLabel()
         self.preview_label.setText("Preview")
-        self.preview_label.setMinimumSize(300, 300)
-        # Background is handled by TransparencyLabel
-        layout.addWidget(self.preview_label, 1) # Stretch 1
+        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview_scroll.setWidget(self.preview_label)
+        
+        layout.addWidget(self.preview_scroll, 1) # Stretch 1
+        
+        # Zoom Toolbar (Phase 18)
+        zoom_layout = QHBoxLayout()
+        zoom_layout.addWidget(QLabel("Zoom:"))
+        
+        self.btn_fit = QPushButton("Fit")
+        self.btn_fit.setCheckable(True)
+        self.btn_fit.setChecked(True)
+        self.btn_fit.setFixedWidth(50)
+        self.btn_fit.clicked.connect(self.toggle_fit_zoom)
+        zoom_layout.addWidget(self.btn_fit)
+        
+        self.btn_100 = QPushButton("1:1")
+        self.btn_100.setFixedWidth(50)
+        self.btn_100.clicked.connect(lambda: self.set_zoom_level(1.0))
+        zoom_layout.addWidget(self.btn_100)
+        
+        self.zoom_slider = QSlider(Qt.Orientation.Horizontal)
+        self.zoom_slider.setRange(10, 400) # 10% to 400%
+        self.zoom_slider.setValue(100) # Start at 100% logic (though overwritten by Fit)
+        self.zoom_slider.setToolTip("View Zoom")
+        self.zoom_slider.valueChanged.connect(self.update_zoom_from_slider)
+        zoom_layout.addWidget(self.zoom_slider)
+        
+        self.zoom_label = QLabel("Fit")
+        self.zoom_label.setFixedWidth(50)
+        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        zoom_layout.addWidget(self.zoom_label)
+        
+        layout.addLayout(zoom_layout)
         
         # Tool Bar
         tools_layout = QHBoxLayout()
@@ -978,12 +1009,12 @@ class MainWindow(QMainWindow):
         qimage = QImage(data, preview.width, preview.height, QImage.Format.Format_RGB888)
         pixmap = QPixmap.fromImage(qimage)
         
-        # Scale if necessary to fit (keep aspect ratio)
-        if pixmap.width() > 512:
-            pixmap = pixmap.scaled(512, 512, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            
-            
-        self.preview_label.setPixmap(pixmap)
+        # Phase 18: Viewport Zoom
+        # Store the full-resolution pixmap (1024x1024)
+        self.current_preview_pixmap = pixmap
+        
+        # Render viewport based on current zoom settings
+        self.refresh_viewport()
     
     def browse_output(self):
         """Browse for output directory."""
@@ -1387,4 +1418,69 @@ class MainWindow(QMainWindow):
         # Default target size 1024 for internal processing
         # (Export will resize to specific targets later)
         return CompositionEngine.compose(image, target_size=1024, scale=scale, fit_mode=fit_mode)
+
+    # =========================================================================
+    # Phase 18: Viewport Zoom Logic
+    # =========================================================================
+
+    def toggle_fit_zoom(self):
+        """Toggle 'Fit' mode."""
+        if self.btn_fit.isChecked():
+            self.zoom_label.setText("Fit")
+            self.refresh_viewport()
+        else:
+            # Revert to current slider value
+            self.update_zoom_from_slider(self.zoom_slider.value())
+
+    def set_zoom_level(self, scale: float):
+        """Set specific zoom level (e.g. 1.0 = 100%)."""
+        self.btn_fit.setChecked(False)
+        self.zoom_slider.setValue(int(scale * 100))
+        # Slider change triggers update_zoom_from_slider -> refresh_viewport
+
+    def update_zoom_from_slider(self, value):
+        """Handle zoom slider changes."""
+        if self.btn_fit.isChecked():
+             self.btn_fit.setChecked(False)
+             
+        scale = value / 100.0
+        self.zoom_label.setText(f"{value}%")
+        self.refresh_viewport()
+
+    def refresh_viewport(self):
+        """Render the current preview pixmap at the correct zoom level."""
+        # 1. Check if we have a base image
+        if not hasattr(self, 'current_preview_pixmap') or not self.current_preview_pixmap:
+             return
+             
+        base_pixmap = self.current_preview_pixmap
+        
+        # 2. Determine Target Size
+        if self.btn_fit.isChecked():
+            # Fit Mode: Scale to fit inside Scroll Area
+            # Note: We need to subtract a bit for scrollbars/margins
+            # But scroll area size might change on resize. 
+            # Ideally we process resizeEvent. For now, simple fit.
+            viewport_size = self.preview_scroll.viewport().size()
+            
+            # If viewport is weirdly small (e.g. init), default to 300
+            if viewport_size.width() < 10 or viewport_size.height() < 10:
+                scaled = base_pixmap.scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            else:
+                 # Subtract standard padding
+                w = viewport_size.width() - 4
+                h = viewport_size.height() - 4
+                scaled = base_pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                
+        else:
+             # Zoom Mode: Scale by factor
+             zoom_factor = self.zoom_slider.value() / 100.0
+             target_w = int(base_pixmap.width() * zoom_factor)
+             target_h = int(base_pixmap.height() * zoom_factor)
+             
+             scaled = base_pixmap.scaled(target_w, target_h, Qt.AspectRatioMode.KeepAspectRatio, 
+                                        Qt.TransformationMode.SmoothTransformation if zoom_factor < 1 else Qt.TransformationMode.FastTransformation)
+                                        
+        self.preview_label.setPixmap(scaled)
+        self.preview_label.adjustSize() # Ensure label fits content
 
